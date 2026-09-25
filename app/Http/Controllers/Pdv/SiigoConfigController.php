@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Pdv;
 
 use App\Http\Controllers\Controller;
+use App\Models\Caja;
+use App\Models\Ubicacion;
 use App\Services\Siigo\SiigoApiClient;
 use App\Services\Siigo\SiigoConfigService;
 use Illuminate\Http\Request;
@@ -19,7 +21,24 @@ class SiigoConfigController extends Controller
     public function index()
     {
         $config = $this->configService->obtenerConfiguracionActual();
-        return view('pdv.siigo.configuracion', compact('config'));
+        $sedes = $this->sedesQueFacturan();
+        return view('pdv.siigo.configuracion', compact('config', 'sedes'));
+    }
+
+    /**
+     * Sedes que venden, y por tanto facturan: las tiendas activas y cualquier
+     * ubicación que tenga una caja.
+     */
+    private function sedesQueFacturan()
+    {
+        return Ubicacion::where('activo', true)
+            ->where(function ($q) {
+                $q->where('tipo', Ubicacion::TIPO_TIENDA)
+                  ->orWhereIn('id', Caja::select('ubicacion_id'));
+            })
+            ->orderByDesc('es_principal')
+            ->orderBy('nombre')
+            ->get();
     }
 
     public function guardar(Request $request)
@@ -38,6 +57,9 @@ class SiigoConfigController extends Controller
             'siigo_seller_id' => 'nullable|integer',
             'siigo_consumidor_final_nit' => 'nullable|string|max:20',
             'siigo_max_reintentos' => 'nullable|integer|min:1|max:10',
+            'sedes' => 'nullable|array',
+            'sedes.*.siigo_document_type_id' => 'nullable|integer',
+            'sedes.*.siigo_credit_note_type_id' => 'nullable|integer',
         ]);
 
         $data = $request->only([
@@ -55,6 +77,19 @@ class SiigoConfigController extends Controller
         $data['siigo_facturar_siempre'] = $request->boolean('siigo_facturar_siempre') ? 'true' : 'false';
 
         $this->configService->guardarConfiguracion($data);
+
+        // Numeración propia por sede (vacío = usa el comprobante general)
+        $sedesValidas = $this->sedesQueFacturan()->keyBy('id');
+        foreach ((array) $request->input('sedes', []) as $ubicacionId => $valores) {
+            $sede = $sedesValidas->get((int) $ubicacionId);
+            if (!$sede) {
+                continue;
+            }
+            $sede->update([
+                'siigo_document_type_id' => ($valores['siigo_document_type_id'] ?? null) ?: null,
+                'siigo_credit_note_type_id' => ($valores['siigo_credit_note_type_id'] ?? null) ?: null,
+            ]);
+        }
 
         return redirect()->route('pdv.siigo.config')
             ->with('success', 'Configuración de SIIGO guardada exitosamente.');

@@ -233,6 +233,66 @@
                         </div>
                     </div>
 
+                    {{-- Numeración propia por sede --}}
+                    <div class="card border-0 shadow-sm mb-4">
+                        <div class="card-header bg-white border-bottom">
+                            <h6 class="fw-bold mb-0"><i class="bi bi-shop me-2"></i>Numeración por sede</h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small mb-3">
+                                Cada sede puede facturar con su propio comprobante de SIIGO (su prefijo y su resolución DIAN).
+                                Las ventas de esa sede salen con ese comprobante, y sus notas crédito con el de notas crédito.
+                                Si se deja en <strong>General</strong>, la sede usa los comprobantes de arriba.
+                                Pulse <strong>Cargar de SIIGO</strong> para ver los nombres de los comprobantes.
+                            </p>
+                            @if($sedes->isEmpty())
+                                <p class="text-muted mb-0">No hay tiendas activas ni ubicaciones con caja.</p>
+                            @else
+                                <div class="table-responsive">
+                                    <table class="table align-middle mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Sede</th>
+                                                <th style="min-width: 240px;">Comprobante factura de venta</th>
+                                                <th style="min-width: 240px;">Comprobante nota crédito</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($sedes as $sede)
+                                                <tr>
+                                                    <td>
+                                                        <div class="fw-semibold">{{ $sede->nombre }}</div>
+                                                        <small class="text-muted">{{ $sede->codigo }}{{ $sede->es_principal ? ' · principal' : '' }}</small>
+                                                    </td>
+                                                    <td>
+                                                        <select name="sedes[{{ $sede->id }}][siigo_document_type_id]" class="form-select form-select-sm js-sede-fv">
+                                                            <option value="">General</option>
+                                                            @if($sede->siigo_document_type_id)
+                                                                <option value="{{ $sede->siigo_document_type_id }}" selected>
+                                                                    ID: {{ $sede->siigo_document_type_id }} (guardado)
+                                                                </option>
+                                                            @endif
+                                                        </select>
+                                                    </td>
+                                                    <td>
+                                                        <select name="sedes[{{ $sede->id }}][siigo_credit_note_type_id]" class="form-select form-select-sm js-sede-nc">
+                                                            <option value="">General</option>
+                                                            @if($sede->siigo_credit_note_type_id)
+                                                                <option value="{{ $sede->siigo_credit_note_type_id }}" selected>
+                                                                    ID: {{ $sede->siigo_credit_note_type_id }} (guardado)
+                                                                </option>
+                                                            @endif
+                                                        </select>
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+
                     <div class="d-flex justify-content-end mb-4">
                         <button type="submit" class="btn text-white px-4" style="background: var(--miracle-pink);">
                             <i class="bi bi-check-lg me-1"></i>Guardar Configuración
@@ -341,6 +401,21 @@
                         selectCN.add(opt);
                     });
                 }
+
+                // Populate per-sede comprobantes (empty = General)
+                const fillSede = (select, types) => {
+                    const current = select.value;
+                    select.innerHTML = '<option value="">General</option>';
+                    if (Array.isArray(types)) {
+                        types.forEach(dt => {
+                            const opt = new Option(dt.id + ' - ' + (dt.name || dt.description || ''), dt.id);
+                            if (dt.id == current) opt.selected = true;
+                            select.add(opt);
+                        });
+                    }
+                };
+                document.querySelectorAll('.js-sede-fv').forEach(s => fillSede(s, data.document_types));
+                document.querySelectorAll('.js-sede-nc').forEach(s => fillSede(s, data.credit_note_types));
 
                 // Populate Payment Types - Efectivo
                 const selectPayEfectivo = document.getElementById('selectPaymentTypeEfectivo');

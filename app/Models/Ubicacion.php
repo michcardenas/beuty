@@ -20,11 +20,15 @@ class Ubicacion extends Model
         'responsable',
         'es_principal',
         'activo',
+        'siigo_document_type_id',
+        'siigo_credit_note_type_id',
     ];
 
     protected $casts = [
         'es_principal' => 'boolean',
         'activo' => 'boolean',
+        'siigo_document_type_id' => 'integer',
+        'siigo_credit_note_type_id' => 'integer',
     ];
 
     // =========================================

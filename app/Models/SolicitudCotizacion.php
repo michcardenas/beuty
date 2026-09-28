@@ -342,6 +342,12 @@ class SolicitudCotizacion extends Model
      */
     public function scopeDeVendedor($query, $vendedorId)
     {
+        // null / 0 => TODOS los vendedores (uso del panel admin "Todos").
+        // El panel del vendedor siempre pasa Auth::id(), así que nunca cae aquí.
+        if (empty($vendedorId)) {
+            return $query;
+        }
+
         return $query->where(function ($q) use ($vendedorId) {
             $q->where('solicitudes_cotizacion.created_by', $vendedorId)
               ->orWhereHas('cliente', function ($c) use ($vendedorId) {

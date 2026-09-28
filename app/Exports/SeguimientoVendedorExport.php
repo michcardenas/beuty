@@ -24,17 +24,19 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
  */
 class SeguimientoVendedorExport implements WithMultipleSheets
 {
-    protected int $vendedorId;
+    protected ?int $vendedorId;
     protected Carbon $fechaInicio;
     protected Carbon $fechaFin;
     protected string $nombreVendedor;
 
-    public function __construct(int $vendedorId, Carbon $fechaInicio, Carbon $fechaFin)
+    public function __construct(?int $vendedorId, Carbon $fechaInicio, Carbon $fechaFin)
     {
         $this->vendedorId = $vendedorId;
         $this->fechaInicio = $fechaInicio;
         $this->fechaFin = $fechaFin;
-        $this->nombreVendedor = optional(User::find($vendedorId))->name ?? 'Vendedor';
+        $this->nombreVendedor = $vendedorId
+            ? (optional(User::find($vendedorId))->name ?? 'Vendedor')
+            : 'Todos los vendedores';
     }
 
     public function sheets(): array
@@ -64,14 +66,14 @@ trait DisenoHojaMiracle
     protected string $cBorder = 'E8E1FA';  // borde suave
 
     protected SeguimientoComercialService $svc;
-    protected int $vendedorId;
+    protected ?int $vendedorId;
     protected Carbon $fechaInicio;
     protected Carbon $fechaFin;
     protected string $nombreVendedor;
 
     public function __construct(
         SeguimientoComercialService $svc,
-        int $vendedorId,
+        ?int $vendedorId,
         Carbon $fechaInicio,
         Carbon $fechaFin,
         string $nombreVendedor
@@ -209,10 +211,12 @@ class HojaResumenVendedor implements FromArray, WithHeadings, WithTitle, WithCus
             ['Total ventas del período', $money($r['total_ventas'])],
             ['Pedidos (cotizaciones aplicadas)', number_format($r['total_pedidos'], 0, ',', '.')],
             ['Ticket promedio', $money(round($r['ticket_promedio']))],
-            ['Ventas de contado', $money($e['contado']['monto']) . '   (' . $e['contado']['cantidad'] . ' ventas)'],
-            ['Ventas a crédito', $money($e['credito']['monto']) . '   (' . $e['credito']['cantidad'] . ' ventas)'],
-            ['Participación de contado', ($e['contado']['participacion'] ?? 0) . '%'],
-            ['Cotizaciones pendientes', number_format($e['pendientes']['cantidad'], 0, ',', '.')],
+            ['Contado (pagado)', $money($e['contado']['monto']) . '   (' . $e['contado']['cantidad'] . ' ventas)'],
+            ['Pendiente de pago', $money($e['pendiente']['monto']) . '   (' . $e['pendiente']['cantidad'] . ' ventas)'],
+            ['Crédito', $money($e['credito']['monto']) . '   (' . $e['credito']['cantidad'] . ' ventas)'],
+            ['Parcial', $money($e['parcial']['monto']) . '   (' . $e['parcial']['cantidad'] . ' ventas)'],
+            ['Mixto', $money($e['mixto']['monto']) . '   (' . $e['mixto']['cantidad'] . ' ventas)'],
+            ['Cotizaciones sin aplicar', number_format($e['cotizaciones_pendientes'] ?? 0, 0, ',', '.')],
             ['Tasa de conversión', ($e['tasa_conversion'] ?? 0) . '%'],
         ];
     }
@@ -294,19 +298,22 @@ class HojaContadoCredito implements FromArray, WithHeadings, WithTitle, WithCust
         $e = $this->svc->cotizacionesPorEstado($this->vendedorId, $this->fechaInicio, $this->fechaFin);
 
         return [
-            ['Contado', $e['contado']['cantidad'], $e['contado']['monto'], $e['contado']['participacion']],
+            ['Contado (pagado)', $e['contado']['cantidad'], $e['contado']['monto'], $e['contado']['participacion']],
+            ['Pendiente de pago', $e['pendiente']['cantidad'], $e['pendiente']['monto'], $e['pendiente']['participacion']],
             ['Crédito', $e['credito']['cantidad'], $e['credito']['monto'], $e['credito']['participacion']],
+            ['Parcial', $e['parcial']['cantidad'], $e['parcial']['monto'], $e['parcial']['participacion']],
+            ['Mixto', $e['mixto']['cantidad'], $e['mixto']['monto'], $e['mixto']['participacion']],
         ];
     }
 
     public function headings(): array
     {
-        return ['Tipo de operación', 'Ventas', 'Monto', 'Participación'];
+        return ['Tipo de pago', 'Ventas', 'Monto', 'Participación'];
     }
 
     protected function subtitulo(): string
     {
-        return 'Contado vs Crédito  ·  ' . $this->nombreVendedor;
+        return 'Ventas por Tipo de Pago  ·  ' . $this->nombreVendedor;
     }
 
     protected function ultimaColumna(): string

@@ -19,8 +19,8 @@
         {{-- Pendientes (prioridad de atención) --}}
         <div class="card mb-4">
             <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                <h6 class="mb-0"><i class="bi bi-hourglass-split me-2 text-warning"></i>Pendientes por gestionar</h6>
-                <span class="badge bg-warning text-dark">{{ $pendientes->count() }}</span>
+                <h6 class="mb-0"><i class="bi bi-hourglass-split me-2 text-secondary"></i>Cotizaciones sin aplicar</h6>
+                <span class="badge bg-secondary">{{ $pendientes->count() }}</span>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -56,6 +56,51 @@
                                     <td colspan="5" class="text-center text-muted py-4">
                                         <i class="bi bi-check2-circle fs-3 d-block mb-2 text-success"></i>
                                         No tienes pedidos pendientes. ¡Todo al día!
+                                    </td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        {{-- Pagos por cobrar --}}
+        <div class="card mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-cash-coin me-2 text-warning"></i>Pagos por cobrar</h6>
+                <span class="badge bg-warning text-dark">{{ $porCobrar->count() }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>N.º</th>
+                                <th>Cliente</th>
+                                <th class="text-end">Monto</th>
+                                <th class="text-center">Fecha</th>
+                                <th class="text-center">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($porCobrar as $p)
+                                <tr>
+                                    <td class="fw-semibold">{{ $p->numero_solicitud }}</td>
+                                    <td>{{ optional($p->cliente)->nombre_contacto ?? 'N/A' }}</td>
+                                    <td class="text-end">${{ number_format($p->monto_total, 0, ',', '.') }}</td>
+                                    <td class="text-center">{{ $p->created_at->isoFormat('D MMM YYYY') }}</td>
+                                    <td class="text-center">
+                                        <a href="{{ route('solicitudes.detalle', $p->id) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">
+                                        <i class="bi bi-check2-circle fs-3 d-block mb-2 text-success"></i>
+                                        No tienes pagos por cobrar. ¡Todo cobrado!
                                     </td>
                                 </tr>
                             @endforelse

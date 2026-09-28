@@ -8,23 +8,27 @@ use Carbon\Carbon;
 /**
  * Servicio de Seguimiento Comercial para Vendedores.
  *
- * Reglas del módulo (Opción A):
  * - La "venta del vendedor" se mide sobre COTIZACIONES atribuidas al vendedor
  *   (scope SolicitudCotizacion::deVendedor = created_by OR cliente.vendedor_id).
- * - Todo cálculo va SIEMPRE filtrado por $vendedorId; el controlador pasa
- *   Auth::id() para el rol vendedor (dato aislado, no editable).
- * - Es aditivo: no altera MetricasService ni el flujo de ventas/cotizaciones.
+ * - Si $vendedorId es null/0, el scope no filtra: agrega TODOS los vendedores
+ *   (opción "Todos" del panel admin). El panel del vendedor siempre pasa Auth::id().
+ * - Aditivo: no altera MetricasService ni el flujo de ventas/cotizaciones.
  *
- * La clasificación contado/crédito reutiliza la misma regla que el resto del
- * sistema: forma_pago_factura LIKE '%Crédito%' => crédito; en otro caso contado.
+ * Clasificación de PAGO idéntica al sistema (getEtiquetaEstadoPagoAttribute):
+ *   forma_pago_factura con 'Mixto'   => Mixto
+ *   forma_pago_factura con 'Crédito' => Crédito  (sin importar estado_pago)
+ *   en otro caso, según estado_pago  => Pagado (contado) / Pendiente / Parcial
  */
 class SeguimientoComercialService
 {
+    /** Condición SQL: la cotización NO es crédito ni mixto (es de contado). */
+    protected string $sqlContado = "(forma_pago_factura IS NULL OR (forma_pago_factura NOT LIKE '%Crédito%' AND forma_pago_factura NOT LIKE '%Mixto%'))";
+
     /**
-     * Resumen de ventas del vendedor en el período: total vendido (cotizaciones
-     * aplicadas), número de pedidos y ticket promedio.
+     * Resumen de ventas del vendedor: total vendido (cotizaciones aplicadas),
+     * número de pedidos y ticket promedio.
      */
-    public function resumenVendedor(int $vendedorId, ?Carbon $fechaInicio = null, ?Carbon $fechaFin = null): array
+    public function resumenVendedor(?int $vendedorId, ?Carbon $fechaInicio = null, ?Carbon $fechaFin = null): array
     {
         $fechaInicio = $fechaInicio ?? Carbon::now()->startOfMonth();
         $fechaFin = $fechaFin ?? Carbon::now()->endOfMonth();
@@ -50,11 +54,10 @@ class SeguimientoComercialService
     }
 
     /**
-     * Comparativa del vendedor entre el período actual y el anterior,
-     * con variación porcentual y tendencia (up/down) para las tarjetas.
+     * Comparativa del vendedor entre el período actual y el anterior.
      */
     public function comparativaVendedor(
-        int $vendedorId,
+        ?int $vendedorId,
         Carbon $inicioActual,
         Carbon $finActual,
         Carbon $inicioAnterior,
@@ -86,78 +89,67 @@ class SeguimientoComercialService
     }
 
     /**
-     * Cotizaciones del vendedor agrupadas por estado en el período (por fecha de
-     * creación), incluyendo el desglose contado/crédito. Misma regla de negocio
-     * que MetricasService::getCotizacionesPorEstado, filtrada por vendedor.
+     * Desglose de las ventas (cotizaciones aplicadas) del período por estado de PAGO,
+     * con la MISMA clasificación que el badge del sistema. Las categorías suman el total.
+     * Además, la tasa de conversión (aplicadas / creadas en el período).
      */
-    public function cotizacionesPorEstado(int $vendedorId, ?Carbon $fechaInicio = null, ?Carbon $fechaFin = null): array
+    public function cotizacionesPorEstado(?int $vendedorId, ?Carbon $fechaInicio = null, ?Carbon $fechaFin = null): array
     {
         $fechaInicio = $fechaInicio ?? Carbon::now()->startOfMonth();
         $fechaFin = $fechaFin ?? Carbon::now()->endOfMonth();
 
-        $row = SolicitudCotizacion::deVendedor($vendedorId)
-            ->whereBetween('created_at', [$fechaInicio, $fechaFin])
-            ->selectRaw('
+        $contado = $this->sqlContado;
+
+        // Desglose por estado de PAGO sobre las ventas aplicadas del período.
+        $p = SolicitudCotizacion::deVendedor($vendedorId)
+            ->aplicadas()
+            ->whereBetween('aplicada_en', [$fechaInicio, $fechaFin])
+            ->selectRaw("
                 COUNT(*) as total_cantidad,
                 COALESCE(SUM(monto_total), 0) as total_monto,
-                SUM(CASE WHEN estado = "pendiente" THEN 1 ELSE 0 END) as pendientes_cantidad,
-                COALESCE(SUM(CASE WHEN estado = "pendiente" THEN monto_total ELSE 0 END), 0) as pendientes_monto,
-                SUM(CASE WHEN estado = "aplicada" THEN 1 ELSE 0 END) as aplicadas_cantidad,
-                COALESCE(SUM(CASE WHEN estado = "aplicada" THEN monto_total ELSE 0 END), 0) as aplicadas_monto,
-                SUM(CASE WHEN estado = "aplicada" AND estado_pago = "pagado" AND (forma_pago_factura IS NULL OR forma_pago_factura NOT LIKE "%Crédito%") THEN 1 ELSE 0 END) as contado_cantidad,
-                COALESCE(SUM(CASE WHEN estado = "aplicada" AND estado_pago = "pagado" AND (forma_pago_factura IS NULL OR forma_pago_factura NOT LIKE "%Crédito%") THEN monto_total ELSE 0 END), 0) as contado_monto,
-                SUM(CASE WHEN estado = "aplicada" AND estado_pago = "pagado" AND forma_pago_factura LIKE "%Crédito%" THEN 1 ELSE 0 END) as credito_cantidad,
-                COALESCE(SUM(CASE WHEN estado = "aplicada" AND estado_pago = "pagado" AND forma_pago_factura LIKE "%Crédito%" THEN monto_total ELSE 0 END), 0) as credito_monto,
-                SUM(CASE WHEN estado = "rechazada" THEN 1 ELSE 0 END) as rechazadas_cantidad,
-                COALESCE(SUM(CASE WHEN estado = "rechazada" THEN monto_total ELSE 0 END), 0) as rechazadas_monto
-            ')
+                SUM(CASE WHEN forma_pago_factura LIKE '%Mixto%' THEN 1 ELSE 0 END) as mixto_cantidad,
+                COALESCE(SUM(CASE WHEN forma_pago_factura LIKE '%Mixto%' THEN monto_total ELSE 0 END), 0) as mixto_monto,
+                SUM(CASE WHEN forma_pago_factura LIKE '%Crédito%' AND forma_pago_factura NOT LIKE '%Mixto%' THEN 1 ELSE 0 END) as credito_cantidad,
+                COALESCE(SUM(CASE WHEN forma_pago_factura LIKE '%Crédito%' AND forma_pago_factura NOT LIKE '%Mixto%' THEN monto_total ELSE 0 END), 0) as credito_monto,
+                SUM(CASE WHEN {$contado} AND estado_pago = 'pagado' THEN 1 ELSE 0 END) as contado_cantidad,
+                COALESCE(SUM(CASE WHEN {$contado} AND estado_pago = 'pagado' THEN monto_total ELSE 0 END), 0) as contado_monto,
+                SUM(CASE WHEN {$contado} AND estado_pago = 'pendiente' THEN 1 ELSE 0 END) as pendiente_cantidad,
+                COALESCE(SUM(CASE WHEN {$contado} AND estado_pago = 'pendiente' THEN monto_total ELSE 0 END), 0) as pendiente_monto,
+                SUM(CASE WHEN {$contado} AND estado_pago = 'parcial' THEN 1 ELSE 0 END) as parcial_cantidad,
+                COALESCE(SUM(CASE WHEN {$contado} AND estado_pago = 'parcial' THEN monto_total ELSE 0 END), 0) as parcial_monto
+            ")
             ->first();
 
-        $totalCantidad = $row->total_cantidad ?? 0;
-        $contadoCantidad = $row->contado_cantidad ?? 0;
-        $contadoMonto = $row->contado_monto ?? 0;
-        $creditoCantidad = $row->credito_cantidad ?? 0;
-        $creditoMonto = $row->credito_monto ?? 0;
-        $pagadasMonto = $contadoMonto + $creditoMonto;
+        // Conversión sobre las cotizaciones CREADAS en el período.
+        $c = SolicitudCotizacion::deVendedor($vendedorId)
+            ->whereBetween('created_at', [$fechaInicio, $fechaFin])
+            ->selectRaw("
+                COUNT(*) as total,
+                SUM(CASE WHEN estado = 'aplicada' THEN 1 ELSE 0 END) as aplicadas,
+                SUM(CASE WHEN estado = 'pendiente' THEN 1 ELSE 0 END) as pendientes
+            ")
+            ->first();
+
+        $totalMonto = $p->total_monto ?? 0;
+        $part = fn($monto) => $totalMonto > 0 ? round(($monto / $totalMonto) * 100, 1) : 0;
 
         return [
-            'pendientes' => [
-                'cantidad' => $row->pendientes_cantidad ?? 0,
-                'monto' => $row->pendientes_monto ?? 0,
-            ],
-            'aplicadas' => [
-                'cantidad' => $row->aplicadas_cantidad ?? 0,
-                'monto' => $row->aplicadas_monto ?? 0,
-            ],
-            'contado' => [
-                'cantidad' => $contadoCantidad,
-                'monto' => $contadoMonto,
-                'participacion' => $pagadasMonto > 0 ? round(($contadoMonto / $pagadasMonto) * 100, 1) : 0,
-            ],
-            'credito' => [
-                'cantidad' => $creditoCantidad,
-                'monto' => $creditoMonto,
-                'participacion' => $pagadasMonto > 0 ? round(($creditoMonto / $pagadasMonto) * 100, 1) : 0,
-            ],
-            'rechazadas' => [
-                'cantidad' => $row->rechazadas_cantidad ?? 0,
-                'monto' => $row->rechazadas_monto ?? 0,
-            ],
-            'total' => [
-                'cantidad' => $totalCantidad,
-                'monto' => $row->total_monto ?? 0,
-            ],
-            'tasa_conversion' => $totalCantidad > 0
-                ? round((($row->aplicadas_cantidad ?? 0) / $totalCantidad) * 100, 1)
-                : 0,
+            'total' => ['cantidad' => $p->total_cantidad ?? 0, 'monto' => $totalMonto],
+            'contado' => ['cantidad' => $p->contado_cantidad ?? 0, 'monto' => $p->contado_monto ?? 0, 'participacion' => $part($p->contado_monto ?? 0)],
+            'pendiente' => ['cantidad' => $p->pendiente_cantidad ?? 0, 'monto' => $p->pendiente_monto ?? 0, 'participacion' => $part($p->pendiente_monto ?? 0)],
+            'parcial' => ['cantidad' => $p->parcial_cantidad ?? 0, 'monto' => $p->parcial_monto ?? 0, 'participacion' => $part($p->parcial_monto ?? 0)],
+            'credito' => ['cantidad' => $p->credito_cantidad ?? 0, 'monto' => $p->credito_monto ?? 0, 'participacion' => $part($p->credito_monto ?? 0)],
+            'mixto' => ['cantidad' => $p->mixto_cantidad ?? 0, 'monto' => $p->mixto_monto ?? 0, 'participacion' => $part($p->mixto_monto ?? 0)],
+            // Cotizaciones aún SIN aplicar (estado de la cotización, no del pago):
+            'cotizaciones_pendientes' => $c->pendientes ?? 0,
+            'tasa_conversion' => ($c->total ?? 0) > 0 ? round((($c->aplicadas ?? 0) / $c->total) * 100, 1) : 0,
         ];
     }
 
     /**
-     * Ranking de clientes del vendedor por ventas en el período: total facturado,
-     * número de pedidos y fecha de última compra. (Etapa 3)
+     * Ranking de clientes del vendedor por ventas en el período. (Etapa 3)
      */
-    public function rankingClientes(int $vendedorId, ?Carbon $fechaInicio = null, ?Carbon $fechaFin = null, ?int $limite = null): array
+    public function rankingClientes(?int $vendedorId, ?Carbon $fechaInicio = null, ?Carbon $fechaFin = null, ?int $limite = null): array
     {
         $fechaInicio = $fechaInicio ?? Carbon::now()->startOfMonth();
         $fechaFin = $fechaFin ?? Carbon::now()->endOfMonth();
@@ -193,10 +185,9 @@ class SeguimientoComercialService
     }
 
     /**
-     * Detalle de pedidos (cotizaciones) de un cliente concreto para el vendedor,
-     * en el período. (Etapa 3 - drill-down)
+     * Detalle de pedidos de un cliente concreto para el vendedor. (Etapa 3 - drill-down)
      */
-    public function pedidosDeCliente(int $vendedorId, int $clienteId, ?Carbon $fechaInicio = null, ?Carbon $fechaFin = null)
+    public function pedidosDeCliente(?int $vendedorId, int $clienteId, ?Carbon $fechaInicio = null, ?Carbon $fechaFin = null)
     {
         $fechaInicio = $fechaInicio ?? Carbon::now()->startOfMonth();
         $fechaFin = $fechaFin ?? Carbon::now()->endOfMonth();
@@ -209,14 +200,31 @@ class SeguimientoComercialService
     }
 
     /**
-     * Seguimiento de pedidos del vendedor para priorizar la atención:
-     * pendientes (todos, para gestionar) y los últimos movimientos. (Etapa 5)
+     * Seguimiento de pedidos del vendedor: pendientes (sin aplicar) y últimos. (Etapa 5)
      */
-    public function seguimientoPedidos(int $vendedorId, int $limiteUltimos = 15): array
+    public function seguimientoPedidos(?int $vendedorId, int $limiteUltimos = 15): array
     {
+        // 1) Cotizaciones SIN APLICAR (estado de la cotización = pendiente).
         $pendientes = SolicitudCotizacion::deVendedor($vendedorId)
             ->with(['cliente:id,nombre_contacto'])
             ->pendientes()
+            ->orderByDesc('created_at')
+            ->limit(200)
+            ->get();
+
+        // 2) PAGOS POR COBRAR: ventas aplicadas con pago pendiente (badge "Pendiente",
+        //    es decir contado sin cobrar; el crédito tiene su propio badge).
+        $porCobrar = SolicitudCotizacion::deVendedor($vendedorId)
+            ->with(['cliente:id,nombre_contacto'])
+            ->aplicadas()
+            ->where('estado_pago', 'pendiente')
+            ->where(function ($q) {
+                $q->whereNull('forma_pago_factura')
+                  ->orWhere(function ($q2) {
+                      $q2->where('forma_pago_factura', 'not like', '%Crédito%')
+                         ->where('forma_pago_factura', 'not like', '%Mixto%');
+                  });
+            })
             ->orderByDesc('created_at')
             ->limit(200)
             ->get();
@@ -229,15 +237,15 @@ class SeguimientoComercialService
 
         return [
             'pendientes' => $pendientes,
+            'por_cobrar' => $porCobrar,
             'ultimos' => $ultimos,
         ];
     }
 
     /**
-     * Tendencia diaria de ventas del vendedor (cotizaciones aplicadas por día)
-     * para el gráfico del panel. (Etapa 2)
+     * Tendencia diaria de ventas del vendedor (cotizaciones aplicadas por día). (Etapa 2)
      */
-    public function tendenciaDiaria(int $vendedorId, int $dias = 30): array
+    public function tendenciaDiaria(?int $vendedorId, int $dias = 30): array
     {
         $fechaInicio = Carbon::now()->subDays($dias - 1)->startOfDay();
         $fechaFin = Carbon::now()->endOfDay();

@@ -359,7 +359,23 @@ class SolicitudController extends Controller
             return response()->json(['error' => 'No tiene permisos para ver esta solicitud'], 403);
         }
 
-        // Vendedor puede ver detalle de cualquier cotización (solo lectura)
+        // Vendedor puro: solo puede ver el detalle de SUS cotizaciones (creadas por él
+        // o de sus clientes). Los demás roles conservan su acceso actual. Mismo criterio
+        // que edit(): evita que un vendedor abra por URL una cotización ajena (IDOR).
+        $esVendedorPuro = $user->hasRole('vendedor')
+            && !$user->hasAnyRole(['admin', 'auxiliar_administrativo', 'facturacion', 'inventarios', 'auxiliar_inventario', 'garantias']);
+
+        if ($esVendedorPuro) {
+            $esSuya = $solicitud->created_by == $user->id
+                || ($solicitud->cliente && $solicitud->cliente->vendedor_id == $user->id);
+
+            if (!$esSuya) {
+                if ($request->ajax() || $request->wantsJson()) {
+                    return response()->json(['error' => 'No tiene permisos para ver esta cotización'], 403);
+                }
+                abort(403, 'No tiene permisos para ver esta cotización');
+            }
+        }
 
         $isAuxiliar = $user->hasRole('auxiliar_inventario');
 

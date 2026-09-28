@@ -335,6 +335,22 @@ class SolicitudCotizacion extends Model
     }
 
     /**
+     * Cotizaciones atribuidas a un vendedor (User).
+     * Criterio idéntico al usado en SolicitudController::index:
+     * las creó el vendedor (created_by) O pertenecen a un cliente suyo (cliente.vendedor_id).
+     * Se envuelve en un where-closure para no romper la precedencia con otros filtros.
+     */
+    public function scopeDeVendedor($query, $vendedorId)
+    {
+        return $query->where(function ($q) use ($vendedorId) {
+            $q->where('solicitudes_cotizacion.created_by', $vendedorId)
+              ->orWhereHas('cliente', function ($c) use ($vendedorId) {
+                  $c->where('vendedor_id', $vendedorId);
+              });
+        });
+    }
+
+    /**
      * Cotizaciones con reserva activa
      */
     public function scopeConReservaActiva($query)

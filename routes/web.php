@@ -668,4 +668,30 @@ Route::middleware(['auth', 'role:admin,auxiliar_administrativo,tecnico'])->prefi
     Route::get('reportes/tecnicos', [App\Http\Controllers\ServicioTecnico\ReportesSTController::class, 'tecnicos'])->name('reportes.tecnicos');
 });
 
+// ============================================================
+// SEGUIMIENTO COMERCIAL DEL VENDEDOR (Rol: vendedor) — Módulo aditivo
+// ============================================================
+Route::middleware(['auth', 'role:vendedor,admin'])
+    ->prefix('mi-panel')->name('vendedor.')->group(function () {
+        // Etapa 2 — Panel de ventas del vendedor
+        Route::get('/', [App\Http\Controllers\Vendedor\PanelVendedorController::class, 'index'])->name('panel');
+        // Etapa 3 — Ventas por cliente
+        Route::get('/clientes', [App\Http\Controllers\Vendedor\PanelVendedorController::class, 'ventasPorCliente'])->name('clientes');
+        // Etapa 4 — Contado vs crédito
+        Route::get('/contado-credito', [App\Http\Controllers\Vendedor\PanelVendedorController::class, 'contadoCredito'])->name('contado-credito');
+        // Etapa 5 — Seguimiento de pedidos
+        Route::get('/seguimiento', [App\Http\Controllers\Vendedor\PanelVendedorController::class, 'seguimiento'])->name('seguimiento');
+        // Etapa 6 — Exportación a Excel
+        Route::get('/exportar', [App\Http\Controllers\Vendedor\PanelVendedorController::class, 'exportar'])->name('exportar');
+    });
+
+// ============================================================
+// PANEL ADMIN — Seguimiento comercial por vendedor (una sola pantalla)
+// ============================================================
+Route::middleware(['auth', 'role:admin'])
+    ->prefix('admin/vendedores')->name('admin.vendedores.')->group(function () {
+        Route::get('/', [App\Http\Controllers\Admin\PanelAdminVendedoresController::class, 'index'])->name('index');
+        Route::get('/exportar', [App\Http\Controllers\Admin\PanelAdminVendedoresController::class, 'exportar'])->name('exportar');
+    });
+
 require __DIR__.'/auth.php';

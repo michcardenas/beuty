@@ -35,28 +35,25 @@ class PanelAdminVendedoresController extends Controller
         $vendedorId = $this->resolverVendedor($request, $vendedores);
         [$periodo, $fechaInicio, $fechaFin, $fechaInicioAnterior, $fechaFinAnterior] = $this->resolverPeriodo($request);
 
-        $data = [
+        // Siempre hay datos: un vendedor concreto, o el agregado de TODOS ($vendedorId = null).
+        $comparativa = $this->seguimiento->comparativaVendedor(
+            $vendedorId, $fechaInicio, $fechaFin, $fechaInicioAnterior, $fechaFinAnterior
+        );
+
+        return view('admin.seguimiento-vendedores', [
             'vendedores' => $vendedores,
             'vendedorId' => $vendedorId,
-            'vendedorSel' => $vendedores->firstWhere('id', $vendedorId),
+            'vendedorSel' => $vendedorId ? $vendedores->firstWhere('id', $vendedorId) : null,
             'periodo' => $periodo,
             'fechaInicio' => $fechaInicio,
             'fechaFin' => $fechaFin,
-        ];
-
-        if ($vendedorId) {
-            $comparativa = $this->seguimiento->comparativaVendedor(
-                $vendedorId, $fechaInicio, $fechaFin, $fechaInicioAnterior, $fechaFinAnterior
-            );
-            $data['resumen'] = $comparativa['actual'];
-            $data['variacion'] = $comparativa['variacion'];
-            $data['estados'] = $this->seguimiento->cotizacionesPorEstado($vendedorId, $fechaInicio, $fechaFin);
-            $data['tendencia'] = $this->seguimiento->tendenciaDiaria($vendedorId, 30);
-            $data['clientes'] = $this->seguimiento->rankingClientes($vendedorId, $fechaInicio, $fechaFin, 15);
-            $data['pendientes'] = $this->seguimiento->seguimientoPedidos($vendedorId)['pendientes'];
-        }
-
-        return view('admin.seguimiento-vendedores', $data);
+            'resumen' => $comparativa['actual'],
+            'variacion' => $comparativa['variacion'],
+            'estados' => $this->seguimiento->cotizacionesPorEstado($vendedorId, $fechaInicio, $fechaFin),
+            'tendencia' => $this->seguimiento->tendenciaDiaria($vendedorId, 30),
+            'clientes' => $this->seguimiento->rankingClientes($vendedorId, $fechaInicio, $fechaFin, 15),
+            'seguimiento' => $this->seguimiento->seguimientoPedidos($vendedorId),
+        ]);
     }
 
     public function exportar(Request $request)
@@ -80,11 +77,13 @@ class PanelAdminVendedoresController extends Controller
      */
     protected function resolverVendedor(Request $request, $vendedores): ?int
     {
-        $sel = (int) $request->get('vendedor_id', 0);
-        if ($sel && $vendedores->firstWhere('id', $sel)) {
-            return $sel;
+        $sel = $request->get('vendedor_id');
+        // vacío o "todos" => null (agrega TODOS los vendedores). Es el valor por defecto.
+        if ($sel === null || $sel === '' || $sel === 'todos') {
+            return null;
         }
-        return optional($vendedores->first())->id;
+        $sel = (int) $sel;
+        return ($sel && $vendedores->firstWhere('id', $sel)) ? $sel : null;
     }
 
     /**

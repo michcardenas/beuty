@@ -111,11 +111,11 @@
             </div>
             <div class="col-md-6 col-lg-3">
                 <x-card-metric
-                    title="Pendientes"
-                    :value="($estados['pendientes']['cantidad'] ?? 0)"
+                    title="Pago Pendiente"
+                    :value="'$' . number_format($estados['pendiente']['monto'] ?? 0, 0, ',', '.')"
                     icon="bi-hourglass-split"
                     color="warning"
-                    :subtitle="'$' . number_format($estados['pendientes']['monto'] ?? 0, 0, ',', '.') . ' por gestionar'"
+                    :subtitle="($estados['pendiente']['cantidad'] ?? 0) . ' ventas por cobrar · ' . ($estados['pendiente']['participacion'] ?? 0) . '%'"
                 />
             </div>
             <div class="col-md-6 col-lg-3">

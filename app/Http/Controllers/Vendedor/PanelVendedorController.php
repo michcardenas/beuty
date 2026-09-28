@@ -92,6 +92,7 @@ class PanelVendedorController extends Controller
 
         return view('vendedor.seguimiento', [
             'pendientes' => $data['pendientes'],
+            'porCobrar' => $data['por_cobrar'],
             'ultimos' => $data['ultimos'],
         ]);
     }

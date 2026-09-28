@@ -15,6 +15,36 @@
             <span>Inicio</span>
         </a>
 
+        {{-- Seguimiento Comercial (rol vendedor) --}}
+        @if(auth()->user()->hasRole('vendedor'))
+            <div class="border-top my-2" style="border-color: var(--miracle-lilac) !important;"></div>
+            <p class="nav-link mb-1 text-muted small fw-semibold text-uppercase">
+                <i class="bi bi-graph-up-arrow me-1"></i>
+                <span>Mi Gestión Comercial</span>
+            </p>
+            <a href="{{ route('vendedor.panel') }}"
+               class="nav-link mb-2 d-flex align-items-center gap-2 {{ request()->routeIs('vendedor.panel') ? 'active' : 'text-dark' }}">
+                <i class="bi bi-speedometer2"></i>
+                <span>Mi Panel</span>
+            </a>
+            <a href="{{ route('vendedor.clientes') }}"
+               class="nav-link mb-2 d-flex align-items-center gap-2 {{ request()->routeIs('vendedor.clientes') ? 'active' : 'text-dark' }}">
+                <i class="bi bi-people"></i>
+                <span>Ventas por Cliente</span>
+            </a>
+            <a href="{{ route('vendedor.contado-credito') }}"
+               class="nav-link mb-2 d-flex align-items-center gap-2 {{ request()->routeIs('vendedor.contado-credito') ? 'active' : 'text-dark' }}">
+                <i class="bi bi-cash-coin"></i>
+                <span>Contado / Crédito</span>
+            </a>
+            <a href="{{ route('vendedor.seguimiento') }}"
+               class="nav-link mb-2 d-flex align-items-center gap-2 {{ request()->routeIs('vendedor.seguimiento') ? 'active' : 'text-dark' }}">
+                <i class="bi bi-list-check"></i>
+                <span>Seguimiento</span>
+            </a>
+            <div class="border-top my-2" style="border-color: var(--miracle-lilac) !important;"></div>
+        @endif
+
         {{-- Servicio Técnico (para admin y técnico) - OCULTO TEMPORALMENTE
         @if(auth()->user()->hasRole(['admin', 'tecnico']))
             <div class="nav-item mb-2">
@@ -73,6 +103,11 @@
                class="nav-link mb-2 d-flex align-items-center gap-2 {{ request()->routeIs('metricas.productos.*') ? 'active' : 'text-dark' }}">
                 <i class="bi bi-bar-chart-steps"></i>
                 <span>Métricas Productos</span>
+            </a>
+            <a href="{{ route('admin.vendedores.index') }}"
+               class="nav-link mb-2 d-flex align-items-center gap-2 {{ request()->routeIs('admin.vendedores.*') ? 'active' : 'text-dark' }}">
+                <i class="bi bi-person-lines-fill"></i>
+                <span>Seguimiento Vendedores</span>
             </a>
         @endif
 

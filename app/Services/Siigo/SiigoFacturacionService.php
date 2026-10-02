@@ -255,7 +255,7 @@ class SiigoFacturacionService
         $venta = $facturaOriginal->ventaPdv;
         $venta->loadMissing(['items.producto', 'items.variante', 'cliente']);
 
-        $creditNoteTypeId = (int) ConfiguracionPdv::obtener('siigo_credit_note_type_id');
+        $creditNoteTypeId = $this->comprobanteNotaCredito($venta);
         if (!$creditNoteTypeId) {
             throw new Exception('No se ha configurado el tipo de documento para notas crédito en SIIGO.');
         }
@@ -423,7 +423,7 @@ class SiigoFacturacionService
 
         $devolucion->loadMissing(['items.producto', 'items.variante', 'ventaPdv.cliente']);
 
-        $creditNoteTypeId = (int) ConfiguracionPdv::obtener('siigo_credit_note_type_id');
+        $creditNoteTypeId = $this->comprobanteNotaCredito($devolucion->ventaPdv);
         if (!$creditNoteTypeId) {
             throw new Exception('No se ha configurado el tipo de documento para notas crédito en SIIGO.');
         }
@@ -959,12 +959,39 @@ class SiigoFacturacionService
     /**
      * Build the invoice payload for SIIGO.
      */
+    /**
+     * Comprobante de SIIGO con el que factura la sede de la venta.
+     *
+     * En SIIGO la numeración (prefijo y resolución DIAN) pertenece al
+     * comprobante, así que cada sede con numeración propia tiene el suyo.
+     * Una sede sin comprobante asignado usa el general de la configuración.
+     */
+    private function comprobanteFactura(VentaPdv $venta): int
+    {
+        $venta->loadMissing('ubicacion');
+
+        return (int) ($venta->ubicacion?->siigo_document_type_id
+            ?: ConfiguracionPdv::obtener('siigo_document_type_id'));
+    }
+
+    /**
+     * Comprobante de notas crédito de la sede donde se hizo la venta original,
+     * para que la nota salga con la misma numeración que su factura.
+     */
+    private function comprobanteNotaCredito(?VentaPdv $venta): int
+    {
+        $venta?->loadMissing('ubicacion');
+
+        return (int) ($venta?->ubicacion?->siigo_credit_note_type_id
+            ?: ConfiguracionPdv::obtener('siigo_credit_note_type_id'));
+    }
+
     private function construirPayloadFactura(VentaPdv $venta, string $customerIdentification, bool $sendEmail = true, ?string $emailDestino = null): array
     {
         // Asegurar precisión completa al serializar floats (por si el hosting tiene serialize_precision < 0).
         @ini_set('serialize_precision', '-1');
 
-        $documentTypeId = (int) ConfiguracionPdv::obtener('siigo_document_type_id');
+        $documentTypeId = $this->comprobanteFactura($venta);
         $sellerId = (int) ConfiguracionPdv::obtener('siigo_seller_id');
 
         if (!$documentTypeId) {

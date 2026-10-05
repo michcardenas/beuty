@@ -7,6 +7,7 @@ use App\Models\ConfiguracionPdv;
 use App\Models\DevolucionParcialPdv;
 use App\Models\FacturaSiigo;
 use App\Models\VentaPdv;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Exception;
 
@@ -998,6 +999,11 @@ class SiigoFacturacionService
             throw new Exception('No se ha configurado el tipo de documento para facturas en SIIGO.');
         }
 
+        // El vendedor va donde lo pida el comprobante: el general (25768) lo
+        // quiere por ítem; el de Medellín (MED, 62223) en el documento, y sin
+        // él SIIGO responde 400 «The field seller is required».
+        $vendedorPorItem = $this->vendedorPorItem($documentTypeId);
+
         $payload = [
             'document' => ['id' => $documentTypeId],
             'date' => now()->format('Y-m-d'),
@@ -1009,9 +1015,13 @@ class SiigoFacturacionService
             'mail' => ['send' => $sendEmail],
             // Marcador de versión de código para verificar deploy (ver logs SIIGO)
             'observations' => "Venta PdV #{$venta->numero_venta} [v-precision-6]",
-            'items' => $this->construirItems($venta),
+            'items' => $this->construirItems($venta, $vendedorPorItem),
             'payments' => $this->construirPayments($venta),
         ];
+
+        if (!$vendedorPorItem && $sellerId) {
+            $payload['seller'] = $sellerId;
+        }
 
         return $payload;
     }
@@ -1054,6 +1064,25 @@ class SiigoFacturacionService
                 $response = $this->api->post($endpoint, $payload, $factura->id);
                 return [$response, $payload];
             }
+
+            // El comprobante quería el vendedor en el documento y no se supo
+            // antes (no se pudo consultar seller_by_item): se mueve y se
+            // reintenta UNA vez.
+            $sellerId = (int) ConfiguracionPdv::obtener('siigo_seller_id');
+            if ($endpoint === '/v1/invoices'
+                && $sellerId
+                && empty($payload['seller'])
+                && preg_match('/field seller is required/i', $e->getMessage())
+            ) {
+                Log::info("SIIGO factura {$factura->id}: el comprobante pide el vendedor en el documento; se reintenta.");
+                $payload['seller'] = $sellerId;
+                $payload['items'] = array_map(function ($item) { unset($item['seller']); return $item; }, $payload['items'] ?? []);
+                if (isset($payload['document']['id'])) {
+                    Cache::put("siigo_seller_by_item_{$payload['document']['id']}", false, now()->addMinutes(10));
+                }
+                $response = $this->api->post($endpoint, $payload, $factura->id);
+                return [$response, $payload];
+            }
             throw $e;
         }
     }
@@ -1061,7 +1090,29 @@ class SiigoFacturacionService
     /**
      * Build items array for SIIGO.
      */
-    private function construirItems(VentaPdv $venta): array
+    /**
+     * ¿El comprobante lleva el vendedor en cada ítem (`seller_by_item`)? Se
+     * pregunta a SIIGO y se guarda 10 minutos. Si no se puede saber, true:
+     * es como se facturó siempre.
+     */
+    private function vendedorPorItem(int $documentTypeId): bool
+    {
+        return Cache::remember("siigo_seller_by_item_{$documentTypeId}", now()->addMinutes(10), function () use ($documentTypeId) {
+            try {
+                foreach ((array) $this->api->get('/v1/document-types', ['type' => 'FV']) as $tipo) {
+                    if ((int) ($tipo['id'] ?? 0) === $documentTypeId) {
+                        return (bool) ($tipo['seller_by_item'] ?? true);
+                    }
+                }
+            } catch (Exception $e) {
+                Log::warning("SIIGO: no se pudo leer seller_by_item del comprobante {$documentTypeId}: {$e->getMessage()}");
+            }
+
+            return true;
+        });
+    }
+
+    private function construirItems(VentaPdv $venta, bool $vendedorPorItem = true): array
     {
         $taxId = ConfiguracionPdv::obtener('siigo_tax_id');
         $sellerId = (int) ConfiguracionPdv::obtener('siigo_seller_id');
@@ -1107,7 +1158,7 @@ class SiigoFacturacionService
             }
 
             // Add seller per item if configured (required when seller_by_item is true in SIIGO)
-            if ($sellerId) {
+            if ($sellerId && $vendedorPorItem) {
                 $itemData['seller'] = $sellerId;
             }
 

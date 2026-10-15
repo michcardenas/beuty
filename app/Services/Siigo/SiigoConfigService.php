@@ -188,6 +188,7 @@ class SiigoConfigService
             'siigo_payment_type_efectivo_id', 'siigo_payment_type_transferencia_id',
             'siigo_tax_id', 'siigo_seller_id',
             'siigo_consumidor_final_nit', 'siigo_facturar_siempre', 'siigo_max_reintentos',
+            'siigo_payment_type_credito_id', 'siigo_tax_iva5_id', 'siigo_codigo_flete',
         ];
 
         foreach ($claves as $clave) {
@@ -224,6 +225,10 @@ class SiigoConfigService
             'siigo_consumidor_final_nit' => ConfiguracionPdv::obtener('siigo_consumidor_final_nit', '222222222222'),
             'siigo_facturar_siempre' => ConfiguracionPdv::obtenerBoolean('siigo_facturar_siempre', false),
             'siigo_max_reintentos' => ConfiguracionPdv::obtenerNumero('siigo_max_reintentos', 3),
+            // Facturación de cotizaciones
+            'siigo_payment_type_credito_id' => ConfiguracionPdv::obtener('siigo_payment_type_credito_id', ''),
+            'siigo_tax_iva5_id' => ConfiguracionPdv::obtener('siigo_tax_iva5_id', ''),
+            'siigo_codigo_flete' => ConfiguracionPdv::obtener('siigo_codigo_flete', ''),
         ];
     }
 }

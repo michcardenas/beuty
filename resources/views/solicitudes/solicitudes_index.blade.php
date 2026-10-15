@@ -67,6 +67,14 @@
             </div>
           </div>
 
+          @if(auth()->user()->puedeFacturarCotizaciones())
+          <div class="d-flex justify-content-end mb-2">
+            <button type="button" class="btn btn-primary btn-sm" id="btnEnviarLoteDian" disabled>
+              <i class="bi bi-send me-1"></i>Enviar seleccionadas a la DIAN (<span class="js-n">0</span>)
+            </button>
+          </div>
+          @endif
+
           <table id="solicitudes-table" class="table-responsive w-full text-sm text-left">
             <thead class="text-xs uppercase bg-gray-100">
               <tr>
@@ -85,6 +93,7 @@
                 <th>Descargue</th>
                 <th>Envío</th>
                 <th>Reserva</th>
+                <th>Factura</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -147,7 +156,8 @@
         { data:'estado_pago_badge', name:'estado_pago', orderable:false, searchable:false },
         { data:'descargue_badge', name:'descargue_badge', orderable:false, searchable:false },
         { data:'estado_envio_badge', name:'estado_envio', orderable:false, searchable:false },
-        { data:'reserva_badge', name:'reserva_badge', orderable:false, searchable:false }
+        { data:'reserva_badge', name:'reserva_badge', orderable:false, searchable:false },
+        { data:'factura', name:'factura', orderable:false, searchable:false }
       ],
       dom: "<'flex justify-between mb-4'<'relative'B>f>t<'flex justify-between items-center px-2 my-2'i<'pagination-wrapper'p>>",
       buttons: [
@@ -875,6 +885,7 @@
   @endhasanyrole
 
   </script>
+  @include('solicitudes.partials.factura-electronica-js')
   @endpush
 
   <!-- Modal para ver detalle -->

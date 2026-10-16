@@ -13,6 +13,7 @@ class FacturaSiigo extends Model
 
     protected $fillable = [
         'venta_pdv_id',
+        'solicitud_cotizacion_id',
         'tipo_documento',
         'siigo_document_type_id',
         'siigo_invoice_id',
@@ -51,6 +52,16 @@ class FacturaSiigo extends Model
     public function ventaPdv()
     {
         return $this->belongsTo(VentaPdv::class);
+    }
+
+    public function solicitudCotizacion()
+    {
+        return $this->belongsTo(SolicitudCotizacion::class);
+    }
+
+    public function esDeCotizacion(): bool
+    {
+        return !is_null($this->solicitud_cotizacion_id);
     }
 
     public function cliente()

@@ -51,6 +51,7 @@ class SolicitudCotizacion extends Model
         'facturada_en',
         'facturada_por',
         'archivo_factura',
+        'factura_siigo_id',
         'porcentaje_iva',
         'valor_iva',
         'forma_pago_factura',
@@ -151,6 +152,44 @@ class SolicitudCotizacion extends Model
     public function cliente()
     {
         return $this->belongsTo(Cliente::class, 'cliente_id');
+    }
+
+    /**
+     * Factura electrónica vigente de la cotización (la última que se envió).
+     */
+    public function facturaSiigo()
+    {
+        return $this->belongsTo(FacturaSiigo::class, 'factura_siigo_id');
+    }
+
+    /**
+     * Ya tiene una factura electrónica que SIIGO recibió: aprobada, o
+     * pendiente de la DIAN. Volver a enviarla la duplicaría.
+     */
+    public function tieneFacturaElectronica(): bool
+    {
+        $factura = $this->facturaSiigo;
+
+        return $factura
+            && ($factura->estado_dian === 'aprobada'
+                || ($factura->estado_dian === 'pendiente' && $factura->siigo_invoice_id));
+    }
+
+    /**
+     * Una cotización se factura electrónicamente cuando está aplicada y, o ya
+     * está pagada, o se vendió a crédito (total o mixto), que se factura sin
+     * esperar el pago.
+     */
+    public function puedeFacturarSiigo(): bool
+    {
+        return $this->estado === self::ESTADO_APLICADA
+            && ($this->estado_pago === self::PAGO_PAGADO || $this->esVentaACredito())
+            && !$this->tieneFacturaElectronica();
+    }
+
+    public function esVentaACredito(): bool
+    {
+        return $this->forma_pago_factura && str_contains($this->forma_pago_factura, 'Crédito');
     }
 
     public function enlaceAcceso()

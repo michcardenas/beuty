@@ -54,7 +54,7 @@ class SolicitudController extends Controller
         }
 
         if ($request->ajax()) {
-            $query = SolicitudCotizacion::with(['cliente', 'cliente.vendedor', 'createdBy', 'items', 'stockDescontadoPor'])
+            $query = SolicitudCotizacion::with(['cliente', 'cliente.vendedor', 'createdBy', 'items', 'stockDescontadoPor', 'facturaSiigo'])
                                        ->select('solicitudes_cotizacion.*');
 
             // Vendedor ve las cotizaciones que él creó O las de sus clientes (ej. compras por enlace público)
@@ -109,6 +109,8 @@ class SolicitudController extends Controller
                     }
                 }
             }
+
+            $puedeFacturarDian = $user->puedeFacturarCotizaciones();
 
             return DataTables::of($query)
                 ->addColumn('cliente_nombre', function($s) {
@@ -206,8 +208,11 @@ class SolicitudController extends Controller
 
                     return $badge;
                 })
-                ->addColumn('factura', function($s) {
-                    return '-';
+                ->addColumn('factura', function($s) use ($puedeFacturarDian) {
+                    return view('solicitudes.partials.factura-electronica-celda', [
+                        'solicitud' => $s,
+                        'puedeFacturar' => $puedeFacturarDian,
+                    ])->render();
                 })
                 ->addColumn('action', function($s) {
                     $buttons = '<div class="d-flex justify-content-center gap-1">';
@@ -313,7 +318,7 @@ class SolicitudController extends Controller
                     }
                     return '';
                 })
-                ->rawColumns(['estado_badge', 'reserva_badge', 'marcada_badge', 'estado_pago_badge', 'descargue_badge', 'estado_envio_badge', 'action'])
+                ->rawColumns(['estado_badge', 'reserva_badge', 'marcada_badge', 'estado_pago_badge', 'descargue_badge', 'estado_envio_badge', 'factura', 'action'])
                 ->make(true);
         }
 
@@ -809,6 +814,14 @@ class SolicitudController extends Controller
             $html .= '</div>';
 
             $html .= '</div>';
+        }
+
+        // Factura electrónica (SIIGO → DIAN)
+        if ($solicitud->estado === 'aplicada') {
+            $html .= view('solicitudes.partials.factura-electronica-detalle', [
+                'solicitud' => $solicitud->loadMissing('facturaSiigo'),
+                'puedeFacturar' => auth()->user()->puedeFacturarCotizaciones(),
+            ])->render();
         }
 
         // Sección de descuento de stock (solo para cotizaciones aplicadas)

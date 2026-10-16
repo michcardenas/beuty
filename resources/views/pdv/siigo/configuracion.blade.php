@@ -233,6 +233,73 @@
                         </div>
                     </div>
 
+                    {{-- Factura electrónica de cotizaciones --}}
+                    <div class="card border-0 shadow-sm mb-4">
+                        <div class="card-header bg-white border-bottom">
+                            <h6 class="fw-bold mb-0"><i class="bi bi-file-earmark-text me-2"></i>Facturación de cotizaciones</h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small mb-3">
+                                Las cotizaciones se facturan con el comprobante general de arriba. Si la cotización no tiene
+                                «IVA %», sus precios ya incluyen el 19 % (como en el PDV). Si lo tiene, ese IVA se suma al precio
+                                y se usa el impuesto general (19 %) o el de 5 %.
+                            </p>
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label fw-semibold">Método de Pago - Crédito</label>
+                                    <select name="siigo_payment_type_credito_id" class="form-select" id="selectPaymentTypeCredito">
+                                        <option value="">-- Seleccione --</option>
+                                        @if($config['siigo_payment_type_credito_id'])
+                                            <option value="{{ $config['siigo_payment_type_credito_id'] }}" selected>
+                                                ID: {{ $config['siigo_payment_type_credito_id'] }} (guardado)
+                                            </option>
+                                        @endif
+                                    </select>
+                                    <small class="text-muted">Para cotizaciones a crédito; lleva la fecha de vencimiento</small>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label fw-semibold">Impuesto IVA 5 %</label>
+                                    <select name="siigo_tax_iva5_id" class="form-select" id="selectTaxIva5">
+                                        <option value="">-- Seleccione --</option>
+                                        @if($config['siigo_tax_iva5_id'])
+                                            <option value="{{ $config['siigo_tax_iva5_id'] }}" selected>
+                                                ID: {{ $config['siigo_tax_iva5_id'] }} (guardado)
+                                            </option>
+                                        @endif
+                                    </select>
+                                    <small class="text-muted">Solo para cotizaciones con IVA del 5 %</small>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label fw-semibold">Código del flete en SIIGO</label>
+                                    <input type="text" name="siigo_codigo_flete" class="form-control" maxlength="50"
+                                           value="{{ $config['siigo_codigo_flete'] }}" placeholder="Ej: FLETE">
+                                    <small class="text-muted">Producto o servicio de SIIGO con el que se cobra el flete</small>
+                                </div>
+                            </div>
+
+                            <label class="form-label fw-semibold">Quién puede enviar cotizaciones a la DIAN</label>
+                            @if($posiblesFacturadores->isEmpty())
+                                <p class="text-muted small mb-0">No hay usuarios activos con rol de administración, facturación o inventarios.</p>
+                            @else
+                                <div class="row">
+                                    @foreach($posiblesFacturadores as $usuario)
+                                        <div class="col-md-4">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" name="facturadores[]"
+                                                       value="{{ $usuario->id }}" id="facturador{{ $usuario->id }}"
+                                                       {{ $usuario->hasDirectPermission(\App\Models\User::PERMISO_FACTURAR_COTIZACIONES) ? 'checked' : '' }}>
+                                                <label class="form-check-label" for="facturador{{ $usuario->id }}">
+                                                    {{ $usuario->name }} <small class="text-muted">{{ $usuario->email }}</small>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                </div>
+                                <small class="text-muted">Solo las personas marcadas ven el botón «Enviar a la DIAN» en las cotizaciones.</small>
+                            @endif
+                        </div>
+                    </div>
+
                     {{-- Numeración propia por sede --}}
                     <div class="card border-0 shadow-sm mb-4">
                         <div class="card-header bg-white border-bottom">
@@ -438,6 +505,31 @@
                         const opt = new Option(pt.id + ' - ' + (pt.name || ''), pt.id);
                         if (pt.id == currentPayTransferencia) opt.selected = true;
                         selectPayTransferencia.add(opt);
+                    });
+                }
+
+                // Populate Payment Types - Crédito (cotizaciones)
+                const selectPayCredito = document.getElementById('selectPaymentTypeCredito');
+                const currentPayCredito = selectPayCredito.value;
+                selectPayCredito.innerHTML = '<option value="">-- Seleccione --</option>';
+                if (Array.isArray(data.payment_types)) {
+                    data.payment_types.forEach(pt => {
+                        const opt = new Option(pt.id + ' - ' + (pt.name || ''), pt.id);
+                        if (pt.id == currentPayCredito) opt.selected = true;
+                        selectPayCredito.add(opt);
+                    });
+                }
+
+                // Populate Taxes - IVA 5 % (cotizaciones)
+                const selectTaxIva5 = document.getElementById('selectTaxIva5');
+                const currentTaxIva5 = selectTaxIva5.value;
+                selectTaxIva5.innerHTML = '<option value="">-- Seleccione --</option>';
+                if (Array.isArray(data.taxes)) {
+                    data.taxes.forEach(t => {
+                        const label = t.id + ' - ' + (t.name || '') + (t.percentage ? ' (' + t.percentage + '%)' : '');
+                        const opt = new Option(label, t.id);
+                        if (t.id == currentTaxIva5) opt.selected = true;
+                        selectTaxIva5.add(opt);
                     });
                 }
 

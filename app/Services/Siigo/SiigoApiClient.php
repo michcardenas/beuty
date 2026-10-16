@@ -95,9 +95,13 @@ class SiigoApiClient
         return $this->request('GET', $endpoint, $query, null, $facturaSiigoId);
     }
 
-    public function post(string $endpoint, array $data = [], ?int $facturaSiigoId = null): array
+    /**
+     * @param array $headers encabezados extra, p. ej. Idempotency-Key: si un reintento
+     *                       por timeout llega a SIIGO dos veces, no crea dos facturas.
+     */
+    public function post(string $endpoint, array $data = [], ?int $facturaSiigoId = null, array $headers = []): array
     {
-        return $this->request('POST', $endpoint, [], $data, $facturaSiigoId);
+        return $this->request('POST', $endpoint, [], $data, $facturaSiigoId, false, $headers);
     }
 
     public function put(string $endpoint, array $data = [], ?int $facturaSiigoId = null): array
@@ -138,7 +142,7 @@ class SiigoApiClient
         return $response;
     }
 
-    private function request(string $method, string $endpoint, array $query = [], ?array $data = null, ?int $facturaSiigoId = null, bool $isRetry = false): array
+    private function request(string $method, string $endpoint, array $query = [], ?array $data = null, ?int $facturaSiigoId = null, bool $isRetry = false, array $headers = []): array
     {
         // Reintenta hasta 3 veces en fallos transitorios (red caída, SIIGO 5xx, 429).
         // Backoff: 1s, 3s. Los errores 4xx (validación) NO se reintentan.
@@ -151,7 +155,7 @@ class SiigoApiClient
             $start = microtime(true);
 
             $http = Http::withToken($token)
-                ->withHeaders(['Partner-Id' => $this->partnerId])
+                ->withHeaders(['Partner-Id' => $this->partnerId] + $headers)
                 ->acceptJson()
                 ->timeout(30);
 
@@ -198,7 +202,7 @@ class SiigoApiClient
             // On 401, refresh token and retry once (no cuenta contra $maxIntentos)
             if ($response->status() === 401 && !$isRetry) {
                 Cache::forget(self::TOKEN_CACHE_KEY);
-                return $this->request($method, $endpoint, $query, $data, $facturaSiigoId, true);
+                return $this->request($method, $endpoint, $query, $data, $facturaSiigoId, true, $headers);
             }
 
             // Reintentar en 5xx (SIIGO caído) o 429 (rate limit). 4xx = validación, NO reintentar.

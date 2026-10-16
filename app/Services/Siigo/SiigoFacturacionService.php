@@ -528,6 +528,11 @@ class SiigoFacturacionService
      */
     public function reintentarFactura(FacturaSiigo $factura): FacturaSiigo
     {
+        if ($factura->esDeCotizacion()) {
+            // Se arma desde la cotización, no desde una venta del PDV.
+            return app(SiigoCotizacionService::class)->reintentar($factura);
+        }
+
         if (!$factura->puedeReintentar()) {
             throw new Exception('Esta factura no se puede reintentar (máximo de intentos alcanzado o ya aprobada).');
         }
@@ -625,6 +630,18 @@ class SiigoFacturacionService
         }
 
         return $this->api->getRaw("/v1/invoices/{$factura->siigo_invoice_id}/pdf", $factura->id);
+    }
+
+    /**
+     * XML de la factura electrónica (el documento que valida la DIAN).
+     */
+    public function obtenerXml(FacturaSiigo $factura)
+    {
+        if (!$factura->siigo_invoice_id) {
+            throw new Exception('La factura no tiene ID de SIIGO.');
+        }
+
+        return $this->api->getRaw("/v1/invoices/{$factura->siigo_invoice_id}/xml", $factura->id);
     }
 
     /**
@@ -765,7 +782,7 @@ class SiigoFacturacionService
     /**
      * Resolver (buscar o crear) un cliente en SIIGO.
      */
-    private function resolverCliente(Cliente $cliente, ?array $datosFiscales = null): void
+    public function resolverCliente(Cliente $cliente, ?array $datosFiscales = null): void
     {
         if ($cliente->siigo_id) {
             return; // Already synced
@@ -1176,7 +1193,7 @@ class SiigoFacturacionService
     /**
      * Parse SIIGO response and update factura status.
      */
-    private function procesarEstadoRespuesta(FacturaSiigo $factura, array $response): void
+    public function procesarEstadoRespuesta(FacturaSiigo $factura, array $response): void
     {
         $stamp = $response['stamp'] ?? null;
 

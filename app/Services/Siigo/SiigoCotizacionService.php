@@ -144,6 +144,8 @@ class SiigoCotizacionService
             'pagos' => $pagos,
             'totales' => $totales,
             'observaciones' => $this->observaciones($cotizacion),
+            // Si un envío anterior falló, la nota que se escribió vuelve al cuadro.
+            'nota_facturacion' => $cotizacion->facturaSiigo?->nota_facturacion,
         ];
     }
 
@@ -155,7 +157,7 @@ class SiigoCotizacionService
      * deja creada la factura (pendiente); un segundo clic, otra pestaña u otra
      * usuaria encuentran esa fila y se detienen.
      */
-    public function emitir(SolicitudCotizacion $cotizacion): FacturaSiigo
+    public function emitir(SolicitudCotizacion $cotizacion, ?string $notaFacturacion = null): FacturaSiigo
     {
         $revision = $this->revisar($cotizacion);
         if ($revision['errores']) {
@@ -166,7 +168,7 @@ class SiigoCotizacionService
         $this->facturacion->resolverCliente($cliente);
         $cliente->refresh();
 
-        $factura = DB::transaction(function () use ($cotizacion) {
+        $factura = DB::transaction(function () use ($cotizacion, $notaFacturacion) {
             $bloqueada = SolicitudCotizacion::whereKey($cotizacion->id)->lockForUpdate()->first();
             $bloqueada->load(['facturaSiigo', 'items.producto', 'items.varianteProducto', 'cliente']);
 
@@ -174,7 +176,7 @@ class SiigoCotizacionService
                 throw new Exception('Esta cotización ya se envió a la DIAN.');
             }
 
-            $payload = $this->construirPayload($bloqueada);
+            $payload = $this->construirPayload($bloqueada, $notaFacturacion);
             $totales = $this->calcularTotales($payload['items'], $bloqueada);
             $datos = [
                 'siigo_document_type_id' => $payload['document']['id'],
@@ -186,6 +188,7 @@ class SiigoCotizacionService
                 'siigo_invoice_id' => null,
                 'email_destino' => $bloqueada->cliente->email,
                 'siigo_request' => $payload,
+                'nota_facturacion' => trim((string) $notaFacturacion) ?: null,
                 // Marca el envío como en curso para cualquier otro clic.
                 'ultimo_intento_en' => now(),
             ];
@@ -226,7 +229,7 @@ class SiigoCotizacionService
             throw new Exception('No se pudo cargar la cotización de la factura.');
         }
 
-        return $this->emitir($cotizacion);
+        return $this->emitir($cotizacion, $factura->nota_facturacion);
     }
 
     /**
@@ -309,17 +312,20 @@ class SiigoCotizacionService
 
     /**
      * Referencia de la cotización + las observaciones del vendedor (el recuadro
-     * amarillo, obligatorias al aplicar), que tienen que salir en la factura.
+     * amarillo, obligatorias al aplicar) + la nota opcional que escribe
+     * facturación al enviar (solo en el envío individual; el lote no la lleva).
      * SIIGO acepta hasta 4000 caracteres.
      */
-    private function observaciones(SolicitudCotizacion $cotizacion): string
+    private function observaciones(SolicitudCotizacion $cotizacion, ?string $notaFacturacion = null): string
     {
         $texto = "Cotización #{$cotizacion->numero_solicitud}";
         if ($cotizacion->forma_pago_factura) {
             $texto .= " · {$cotizacion->forma_pago_factura}";
         }
-        if (trim((string) $cotizacion->observaciones_vendedor) !== '') {
-            $texto .= "\n" . trim($cotizacion->observaciones_vendedor);
+        foreach ([$cotizacion->observaciones_vendedor, $notaFacturacion] as $parte) {
+            if (trim((string) $parte) !== '') {
+                $texto .= "\n" . trim($parte);
+            }
         }
 
         return mb_substr($texto, 0, 4000);
@@ -334,7 +340,7 @@ class SiigoCotizacionService
         return ['Idempotency-Key' => substr('MC' . $factura->id . 'H' . md5(json_encode($payload)), 0, 30)];
     }
 
-    private function construirPayload(SolicitudCotizacion $cotizacion): array
+    private function construirPayload(SolicitudCotizacion $cotizacion, ?string $notaFacturacion = null): array
     {
         @ini_set('serialize_precision', '-1');
         $cotizacion->loadMissing(['items.producto', 'items.varianteProducto', 'cliente']);
@@ -357,7 +363,7 @@ class SiigoCotizacionService
             ],
             'stamp' => ['send' => true],
             'mail' => ['send' => (bool) $cliente->email],
-            'observations' => $this->observaciones($cotizacion),
+            'observations' => $this->observaciones($cotizacion, $notaFacturacion),
             'items' => $items,
             'payments' => $this->construirPayments($cotizacion, $totales['total']),
         ];

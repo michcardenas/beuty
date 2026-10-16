@@ -29,6 +29,7 @@ class FacturaSiigo extends Model
         'siigo_request',
         'siigo_response',
         'errores',
+        'nota_facturacion',
         'intentos',
         'ultimo_intento_en',
         'nota_credito_de',

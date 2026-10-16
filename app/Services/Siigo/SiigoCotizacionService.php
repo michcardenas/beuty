@@ -143,6 +143,7 @@ class SiigoCotizacionService
             'lineas' => $items ?? [],
             'pagos' => $pagos,
             'totales' => $totales,
+            'observaciones' => $this->observaciones($cotizacion),
         ];
     }
 
@@ -307,6 +308,24 @@ class SiigoCotizacionService
     }
 
     /**
+     * Referencia de la cotización + las observaciones del vendedor (el recuadro
+     * amarillo, obligatorias al aplicar), que tienen que salir en la factura.
+     * SIIGO acepta hasta 4000 caracteres.
+     */
+    private function observaciones(SolicitudCotizacion $cotizacion): string
+    {
+        $texto = "Cotización #{$cotizacion->numero_solicitud}";
+        if ($cotizacion->forma_pago_factura) {
+            $texto .= " · {$cotizacion->forma_pago_factura}";
+        }
+        if (trim((string) $cotizacion->observaciones_vendedor) !== '') {
+            $texto .= "\n" . trim($cotizacion->observaciones_vendedor);
+        }
+
+        return mb_substr($texto, 0, 4000);
+    }
+
+    /**
      * SIIGO solo acepta llaves alfanuméricas (sin guiones ni espacios) de máximo
      * 30 caracteres; si no, responde «The header Idempotency-Key has an invalid value».
      */
@@ -329,11 +348,6 @@ class SiigoCotizacionService
         $items = $this->construirItems($cotizacion);
         $totales = $this->calcularTotales($items, $cotizacion);
 
-        $observaciones = "Cotización #{$cotizacion->numero_solicitud}";
-        if ($cotizacion->forma_pago_factura) {
-            $observaciones .= " · {$cotizacion->forma_pago_factura}";
-        }
-
         return [
             'document' => ['id' => $documentTypeId],
             'date' => now()->format('Y-m-d'),
@@ -343,7 +357,7 @@ class SiigoCotizacionService
             ],
             'stamp' => ['send' => true],
             'mail' => ['send' => (bool) $cliente->email],
-            'observations' => $observaciones,
+            'observations' => $this->observaciones($cotizacion),
             'items' => $items,
             'payments' => $this->construirPayments($cotizacion, $totales['total']),
         ];

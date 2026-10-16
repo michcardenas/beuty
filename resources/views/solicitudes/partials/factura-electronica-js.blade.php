@@ -65,6 +65,11 @@
                 </table></div></div>`;
         }
 
+        if (r.observaciones) {
+          h += `<h6 class="mt-3">Observaciones de la factura</h6>
+                <div class="alert alert-warning py-2 mb-0" style="white-space: pre-line">${esc(r.observaciones)}</div>`;
+        }
+
         $('#revisionDianContenido').html(h);
         $btn.prop('disabled', r.errores.length > 0);
       }).fail(xhr => {

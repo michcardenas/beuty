@@ -249,10 +249,8 @@ class SiigoCotizacionService
         // Misma factura y mismo contenido = misma llave: si SIIGO ya la creó
         // (p. ej. respondió tarde y el cliente HTTP reintentó), no crea otra.
         // Si se corrigieron datos, el contenido cambia y la llave también.
-        $idempotencia = ['Idempotency-Key' => "miracle-cot-fs{$factura->id}-" . substr(md5(json_encode($payload)), 0, 16)];
-
         try {
-            [$response, $payload] = $this->postConAjustePago($payload, $factura, $idempotencia);
+            [$response, $payload] = $this->postConAjustePago($payload, $factura);
 
             $factura->update([
                 'siigo_response' => $response,
@@ -288,10 +286,10 @@ class SiigoCotizacionService
      * Si SIIGO calcula un total distinto por redondeos («total invoice calculated
      * is X»), ajusta el último pago a la diferencia y reintenta UNA vez.
      */
-    private function postConAjustePago(array $payload, FacturaSiigo $factura, array $headers): array
+    private function postConAjustePago(array $payload, FacturaSiigo $factura): array
     {
         try {
-            return [$this->api->post('/v1/invoices', $payload, $factura->id, $headers), $payload];
+            return [$this->api->post('/v1/invoices', $payload, $factura->id, $this->idempotencia($factura, $payload)), $payload];
         } catch (Exception $e) {
             if (!preg_match('/total invoice calculated is\s+([0-9]+(?:\.[0-9]+)?)/i', $e->getMessage(), $m)) {
                 throw $e;
@@ -303,10 +301,18 @@ class SiigoCotizacionService
             $payload['payments'][$ultimo]['value'] = round($totalSiigo - $otros, 2);
             Log::info("SIIGO ajuste de pago factura {$factura->id}: total SIIGO {$totalSiigo}");
 
-            $headers['Idempotency-Key'] .= '-ajuste';
-
-            return [$this->api->post('/v1/invoices', $payload, $factura->id, $headers), $payload];
+            // El pago cambió, así que la llave también cambia.
+            return [$this->api->post('/v1/invoices', $payload, $factura->id, $this->idempotencia($factura, $payload)), $payload];
         }
+    }
+
+    /**
+     * SIIGO solo acepta llaves alfanuméricas (sin guiones ni espacios) de máximo
+     * 30 caracteres; si no, responde «The header Idempotency-Key has an invalid value».
+     */
+    private function idempotencia(FacturaSiigo $factura, array $payload): array
+    {
+        return ['Idempotency-Key' => substr('MC' . $factura->id . 'H' . md5(json_encode($payload)), 0, 30)];
     }
 
     private function construirPayload(SolicitudCotizacion $cotizacion): array

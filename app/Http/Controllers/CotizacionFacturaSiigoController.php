@@ -32,11 +32,15 @@ class CotizacionFacturaSiigoController extends Controller
         return response()->json(['success' => true] + $this->servicio->revisar($solicitud));
     }
 
-    public function enviar(SolicitudCotizacion $solicitud)
+    public function enviar(Request $request, SolicitudCotizacion $solicitud)
     {
         $this->exigirPermiso();
 
-        return response()->json($this->resultado($solicitud));
+        // Nota opcional de facturación: va en las observaciones de la factura,
+        // debajo de las del vendedor.
+        $nota = $request->validate(['nota_facturacion' => 'nullable|string|max:1500'])['nota_facturacion'] ?? null;
+
+        return response()->json($this->resultado($solicitud, $nota));
     }
 
     /**
@@ -92,10 +96,10 @@ class CotizacionFacturaSiigoController extends Controller
         );
     }
 
-    private function resultado(SolicitudCotizacion $solicitud): array
+    private function resultado(SolicitudCotizacion $solicitud, ?string $notaFacturacion = null): array
     {
         try {
-            $factura = $this->servicio->emitir($solicitud);
+            $factura = $this->servicio->emitir($solicitud, $notaFacturacion);
         } catch (\Exception $e) {
             return ['success' => false, 'mensaje' => $e->getMessage()];
         }

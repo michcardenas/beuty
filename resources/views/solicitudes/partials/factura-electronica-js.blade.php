@@ -65,7 +65,16 @@
                 </table></div></div>`;
         }
 
+        if (r.observaciones) {
+          h += `<h6 class="mt-3">Observaciones de la factura</h6>
+                <div class="alert alert-warning py-2 mb-2" style="white-space: pre-line">${esc(r.observaciones)}</div>`;
+        }
+        h += `<label for="notaFacturacionDian" class="form-label fw-semibold mb-1">Observaciones de facturación <span class="text-muted fw-normal">(opcional)</span></label>
+              <textarea id="notaFacturacionDian" class="form-control" rows="2" maxlength="1500"
+                        placeholder="Se agregan en la factura, debajo de las observaciones del vendedor"></textarea>`;
+
         $('#revisionDianContenido').html(h);
+        $('#notaFacturacionDian').val(r.nota_facturacion || '');
         $btn.prop('disabled', r.errores.length > 0);
       }).fail(xhr => {
         $('#revisionDianContenido').html(`<div class="alert alert-danger">${esc(xhr.responseJSON?.message || 'No se pudo revisar la cotización.')}</div>`);
@@ -78,7 +87,8 @@
       const $btn = $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Enviando…');
       const id = $btn.data('id');
 
-      $.post(`/solicitudes/${id}/siigo/enviar`, { _token: csrf }).done(r => {
+      const nota = ($('#notaFacturacionDian').val() || '').trim();
+      $.post(`/solicitudes/${id}/siigo/enviar`, { _token: csrf, nota_facturacion: nota }).done(r => {
         bootstrap.Modal.getInstance(document.getElementById('modalRevisionDian')).hide();
         Swal.fire(r.success ? 'Enviada' : 'No se pudo enviar', r.mensaje, r.success ? 'success' : 'error');
         recargar();

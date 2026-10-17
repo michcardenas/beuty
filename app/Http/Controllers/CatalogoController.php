@@ -514,7 +514,41 @@ class CatalogoController extends Controller
                     $disponibleReal = ($stock->cantidad_disponible ?? 0) - ($stock->cantidad_reservada ?? 0);
 
                     if ($disponibleReal < $item['cantidad']) {
-                        throw new \Exception("Stock insuficiente para {$producto->nombre}. Disponible: {$disponibleReal}, Solicitado: {$item['cantidad']}");
+                        // Con variantes, decir CUÁL (tono/color): el nombre del producto solo no alcanza.
+                        $nombre = $producto->nombre;
+                        if (!empty($item['variante_id'])) {
+                            $variante = $producto->variantes()->find($item['variante_id']);
+                            if ($variante && $variante->nombre_variante) {
+                                $nombre .= " ({$variante->nombre_variante})";
+                            }
+                        }
+
+                        // El inventario muestra las unidades físicas; aquí cuentan las de bodega
+                        // menos las reservadas por otras cotizaciones. Se explica la diferencia.
+                        if (!$stock) {
+                            $detalle = 'No tiene stock registrado en bodega (el de tiendas no cuenta para cotizaciones).';
+                        } else {
+                            $detalle = 'En ' . (optional($stock->ubicacionRelacion)->nombre ?? 'bodega')
+                                . ": {$stock->cantidad_disponible} en existencia";
+                            if ($stock->cantidad_reservada > 0) {
+                                $detalle .= ", {$stock->cantidad_reservada} reservadas por otras cotizaciones";
+                            }
+                            $detalle .= '.';
+                        }
+
+                        // Lo más común: en inventario se ve stock, pero está en una tienda.
+                        $enTiendas = StockProducto::where('producto_id', $item['producto_id'])
+                            ->where('variante_producto_id', $item['variante_id'] ?? null)
+                            ->whereHas('ubicacionRelacion', fn($u) => $u->where('tipo', 'tienda'))
+                            ->where('cantidad_disponible', '>', 0)
+                            ->with('ubicacionRelacion')
+                            ->get();
+                        if ($enTiendas->isNotEmpty()) {
+                            $detalle .= ' Hay ' . $enTiendas->map(fn($s) => "{$s->cantidad_disponible} en {$s->ubicacionRelacion->nombre}")->implode(', ')
+                                . ', pero el stock de tiendas no cuenta para cotizaciones: hay que trasladarlo a bodega.';
+                        }
+
+                        throw new \Exception("Stock insuficiente para {$nombre}. Disponible: {$disponibleReal}, Solicitado: {$item['cantidad']}. {$detalle}");
                     }
                 }
 

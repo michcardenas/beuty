@@ -50,7 +50,7 @@ class SiigoCotizacionService
      */
     public function revisar(SolicitudCotizacion $cotizacion): array
     {
-        $cotizacion->loadMissing(['items.producto', 'items.varianteProducto', 'cliente.ciudad', 'sucursal.ciudad', 'facturaSiigo']);
+        $cotizacion->loadMissing(['items.producto', 'items.varianteProducto', 'cliente.ciudad', 'cliente.vendedor', 'createdBy.roles', 'sucursal.ciudad', 'facturaSiigo']);
 
         $errores = [];
         $avisos = [];
@@ -175,7 +175,7 @@ class SiigoCotizacionService
 
         $factura = DB::transaction(function () use ($cotizacion, $notaFacturacion) {
             $bloqueada = SolicitudCotizacion::whereKey($cotizacion->id)->lockForUpdate()->first();
-            $bloqueada->load(['facturaSiigo', 'items.producto', 'items.varianteProducto', 'cliente.ciudad', 'sucursal.ciudad']);
+            $bloqueada->load(['facturaSiigo', 'items.producto', 'items.varianteProducto', 'cliente.ciudad', 'cliente.vendedor', 'createdBy.roles', 'sucursal.ciudad']);
 
             if ($bloqueada->tieneFacturaElectronica() || $this->envioEnCurso($bloqueada)) {
                 throw new Exception('Esta cotización ya se envió a la DIAN.');
@@ -327,10 +327,9 @@ class SiigoCotizacionService
         if ($cotizacion->forma_pago_factura) {
             $texto .= " · {$cotizacion->forma_pago_factura}";
         }
-        $texto .= "
-" . $this->entrega($cotizacion);
-        $texto .= "
-" . $this->flete($cotizacion);
+        $texto .= "\nAsesor: " . $this->asesor($cotizacion);
+        $texto .= "\n" . $this->entrega($cotizacion);
+        $texto .= "\n" . $this->flete($cotizacion);
         foreach ([$cotizacion->observaciones_vendedor, $notaFacturacion] as $parte) {
             if (trim((string) $parte) !== '') {
                 $texto .= "\n" . trim($parte);
@@ -338,6 +337,21 @@ class SiigoCotizacionService
         }
 
         return mb_substr($texto, 0, 4000);
+    }
+
+    /**
+     * El asesor comercial: quien creó la cotización si es vendedor (así lo
+     * muestra el PDF de la cotización); si la creó alguien de oficina (admin,
+     * auxiliar), el vendedor asignado al cliente.
+     */
+    private function asesor(SolicitudCotizacion $cotizacion): string
+    {
+        $creador = $cotizacion->createdBy;
+        if ($creador && $creador->hasRole('vendedor')) {
+            return $creador->name;
+        }
+
+        return $cotizacion->cliente?->vendedor?->name ?? $creador?->name ?? 'sin asignar';
     }
 
     /**
@@ -381,7 +395,7 @@ class SiigoCotizacionService
     private function construirPayload(SolicitudCotizacion $cotizacion, ?string $notaFacturacion = null): array
     {
         @ini_set('serialize_precision', '-1');
-        $cotizacion->loadMissing(['items.producto', 'items.varianteProducto', 'cliente.ciudad', 'sucursal.ciudad']);
+        $cotizacion->loadMissing(['items.producto', 'items.varianteProducto', 'cliente.ciudad', 'cliente.vendedor', 'createdBy.roles', 'sucursal.ciudad']);
 
         $documentTypeId = (int) ConfiguracionPdv::obtener('siigo_document_type_id');
         if (!$documentTypeId) {

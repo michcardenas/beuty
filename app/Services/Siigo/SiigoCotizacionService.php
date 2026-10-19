@@ -74,12 +74,16 @@ class SiigoCotizacionService
 
         // Cliente
         $cliente = $cotizacion->cliente;
-        $identificacion = $cliente ? ($cliente->numero_identificacion ?: $cliente->nit) : null;
+        $identificacion = $cliente?->identificacion_facturacion;
         if (!$cliente) {
             $errores[] = 'La cotización no tiene cliente.';
         } else {
             if (!$identificacion) {
                 $errores[] = 'El cliente no tiene número de identificación ni NIT.';
+            } elseif ($cliente->es_persona_juridica && $cliente->numero_identificacion
+                && preg_replace('/\D/', '', $cliente->numero_identificacion) !== $identificacion) {
+                $avisos[] = "Se factura a la empresa con el NIT {$identificacion}, no al número "
+                    . "{$cliente->numero_identificacion} que tiene el cliente en «Identificación».";
             }
             if (!$cliente->email) {
                 $avisos[] = 'El cliente no tiene correo: SIIGO no le enviará la factura.';
@@ -410,7 +414,7 @@ class SiigoCotizacionService
             'document' => ['id' => $documentTypeId],
             'date' => now()->format('Y-m-d'),
             'customer' => [
-                'identification' => (string) ($cliente->numero_identificacion ?: $cliente->nit),
+                'identification' => (string) $cliente->identificacion_facturacion,
                 'branch_office' => 0,
             ],
             'stamp' => ['send' => true],

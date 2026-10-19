@@ -72,6 +72,22 @@ class Cliente extends Model
         return $this->nombre_contacto;
     }
 
+    /**
+     * Identificación con la que se factura en SIIGO. A una persona jurídica se
+     * le factura por el NIT (sin dígito de verificación): en varias empresas el
+     * campo numero_identificacion tiene la cédula del representante legal, y
+     * con ella la factura salía a nombre de la persona natural.
+     */
+    public function getIdentificacionFacturacionAttribute(): ?string
+    {
+        $nit = preg_replace('/\D/', '', explode('-', (string) $this->nit)[0]);
+        if ($this->es_persona_juridica && $nit !== '') {
+            return $nit;
+        }
+
+        return ($this->numero_identificacion ?: $this->nit) ?: null;
+    }
+
     public function getEmailsAdicionalesArrayAttribute(): array
     {
         return is_array($this->emails_adicionales) ? $this->emails_adicionales : [];

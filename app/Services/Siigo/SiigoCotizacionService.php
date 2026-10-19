@@ -21,8 +21,11 @@ use Illuminate\Support\Facades\Log;
  * - El descuento es global (descuento_total): se reparte como porcentaje
  *   sobre los productos.
  * - El flete va como una línea aparte con el código configurado en SIIGO.
- * - Una venta a crédito se envía con el medio de pago «crédito» y la fecha
- *   de vencimiento de la cotización; la mixta, en dos pagos.
+ * - Se factura desde que se crea la cotización, esté pagada o no (decisión de
+ *   Miracle, 19-oct-2026). Solo la pagada de contado va con su medio de pago;
+ *   lo demás (sin pagar, abonada, a crédito o mixta) va TODO al medio
+ *   «crédito»: SIIGO no admite otro pago junto a uno con vencimiento. Los
+ *   abonos se registran en SIIGO con recibo de caja.
  * - Se factura con el comprobante general (la cotización no tiene sede).
  */
 class SiigoCotizacionService
@@ -47,7 +50,7 @@ class SiigoCotizacionService
      */
     public function revisar(SolicitudCotizacion $cotizacion): array
     {
-        $cotizacion->loadMissing(['items.producto', 'items.varianteProducto', 'cliente', 'facturaSiigo']);
+        $cotizacion->loadMissing(['items.producto', 'items.varianteProducto', 'cliente.ciudad', 'sucursal.ciudad', 'facturaSiigo']);
 
         $errores = [];
         $avisos = [];
@@ -62,9 +65,11 @@ class SiigoCotizacionService
         } elseif ($cotizacion->facturaSiigo && !$cotizacion->facturaSiigo->puedeReintentar()) {
             $errores[] = 'Se alcanzó el máximo de intentos de envío para esta cotización. Revise el error en SIIGO.';
         } elseif (!$cotizacion->puedeFacturarSiigo()) {
-            $errores[] = $cotizacion->estado !== SolicitudCotizacion::ESTADO_APLICADA
-                ? 'La cotización debe estar aplicada.'
-                : 'La cotización debe estar pagada o vendida a crédito.';
+            $errores[] = 'La cotización está rechazada.';
+        }
+        if (!$this->pagadaDeContado($cotizacion) && !$cotizacion->esVentaACredito()) {
+            $avisos[] = 'La cotización aún no está pagada: la factura sale a crédito (medio «crédito» de SIIGO). '
+                . 'Cuando paguen, registre el recibo de caja en SIIGO.';
         }
 
         // Cliente
@@ -170,7 +175,7 @@ class SiigoCotizacionService
 
         $factura = DB::transaction(function () use ($cotizacion, $notaFacturacion) {
             $bloqueada = SolicitudCotizacion::whereKey($cotizacion->id)->lockForUpdate()->first();
-            $bloqueada->load(['facturaSiigo', 'items.producto', 'items.varianteProducto', 'cliente']);
+            $bloqueada->load(['facturaSiigo', 'items.producto', 'items.varianteProducto', 'cliente.ciudad', 'sucursal.ciudad']);
 
             if ($bloqueada->tieneFacturaElectronica() || $this->envioEnCurso($bloqueada)) {
                 throw new Exception('Esta cotización ya se envió a la DIAN.');
@@ -322,6 +327,10 @@ class SiigoCotizacionService
         if ($cotizacion->forma_pago_factura) {
             $texto .= " · {$cotizacion->forma_pago_factura}";
         }
+        $texto .= "
+" . $this->entrega($cotizacion);
+        $texto .= "
+" . $this->flete($cotizacion);
         foreach ([$cotizacion->observaciones_vendedor, $notaFacturacion] as $parte) {
             if (trim((string) $parte) !== '') {
                 $texto .= "\n" . trim($parte);
@@ -329,6 +338,35 @@ class SiigoCotizacionService
         }
 
         return mb_substr($texto, 0, 4000);
+    }
+
+    /**
+     * Sucursal y dirección de entrega; sin sucursal, la dirección del cliente.
+     */
+    private function entrega(SolicitudCotizacion $cotizacion): string
+    {
+        $sucursal = $cotizacion->sucursal;
+        $lugar = $sucursal ?? $cotizacion->cliente;
+        $direccion = implode(', ', array_filter([trim((string) $lugar?->direccion), $lugar?->ciudad?->nombre]));
+
+        return ($sucursal ? "Sucursal: {$sucursal->nombre} · " : '')
+            . 'Dirección de entrega: ' . ($direccion ?: 'sin registrar');
+    }
+
+    /**
+     * Lo mismo que muestra el detalle de la cotización: el valor cobrado, o
+     * «aplica» cuando el cliente paga flete de valor variable.
+     */
+    private function flete(SolicitudCotizacion $cotizacion): string
+    {
+        $valor = (float) $cotizacion->valor_flete;
+        if ($valor > 0) {
+            return 'Flete: $' . number_format($valor, 0, ',', '.') . ' (incluido en esta factura)';
+        }
+
+        return $cotizacion->cliente?->aplica_flete
+            ? 'Flete: aplica, valor según la entrega (no incluido en esta factura)'
+            : 'Flete: no aplica';
     }
 
     /**
@@ -343,7 +381,7 @@ class SiigoCotizacionService
     private function construirPayload(SolicitudCotizacion $cotizacion, ?string $notaFacturacion = null): array
     {
         @ini_set('serialize_precision', '-1');
-        $cotizacion->loadMissing(['items.producto', 'items.varianteProducto', 'cliente']);
+        $cotizacion->loadMissing(['items.producto', 'items.varianteProducto', 'cliente.ciudad', 'sucursal.ciudad']);
 
         $documentTypeId = (int) ConfiguracionPdv::obtener('siigo_document_type_id');
         if (!$documentTypeId) {
@@ -454,34 +492,29 @@ class SiigoCotizacionService
     }
 
     /**
-     * Contado: un pago por el medio de la cotización. Crédito: todo a crédito
-     * con vencimiento. Mixto: lo de contado y el resto a crédito.
+     * Pagada de contado: un pago por el medio de la cotización. Todo lo demás,
+     * un solo pago a crédito por el total con el vencimiento de la cotización
+     * (hoy si no tiene): SIIGO rechaza otro pago junto a uno con vencimiento.
      */
     private function construirPayments(SolicitudCotizacion $cotizacion, float $total): array
     {
-        $vencimiento = ($cotizacion->fecha_vencimiento ?? now())->format('Y-m-d');
-        $hoy = now()->format('Y-m-d');
-
-        if (!$cotizacion->esVentaACredito()) {
-            return [['id' => $this->medioContado($cotizacion), 'value' => $total, 'due_date' => $hoy]];
+        if ($this->pagadaDeContado($cotizacion)) {
+            return [['id' => $this->medioContado($cotizacion), 'value' => $total, 'due_date' => now()->format('Y-m-d')]];
         }
 
         $credito = (int) ConfiguracionPdv::obtener('siigo_payment_type_credito_id');
         if (!$credito) {
-            throw new Exception('La cotización es a crédito y no hay medio de pago «crédito» configurado en SIIGO.');
+            throw new Exception('La cotización no está pagada de contado y no hay medio de pago «crédito» configurado en SIIGO.');
         }
 
-        $esMixto = str_starts_with($cotizacion->forma_pago_factura, 'Mixto');
-        $montoCredito = $esMixto ? min((float) $cotizacion->monto_credito, $total) : $total;
-        $contado = round($total - $montoCredito, 2);
+        $vencimiento = $cotizacion->fecha_vencimiento?->isFuture() ? $cotizacion->fecha_vencimiento : now();
 
-        $pagos = [];
-        if ($contado > 0) {
-            $pagos[] = ['id' => $this->medioContado($cotizacion), 'value' => $contado, 'due_date' => $hoy];
-        }
-        $pagos[] = ['id' => $credito, 'value' => round($montoCredito, 2), 'due_date' => $vencimiento];
+        return [['id' => $credito, 'value' => $total, 'due_date' => $vencimiento->format('Y-m-d')]];
+    }
 
-        return $pagos;
+    private function pagadaDeContado(SolicitudCotizacion $cotizacion): bool
+    {
+        return $cotizacion->estado_pago === SolicitudCotizacion::PAGO_PAGADO && !$cotizacion->esVentaACredito();
     }
 
     private function medioContado(SolicitudCotizacion $cotizacion): int

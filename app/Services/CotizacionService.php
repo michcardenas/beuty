@@ -145,6 +145,13 @@ class CotizacionService
             'advertencias' => [],
         ];
 
+        // Ni facturación la edita: lo cotizado ya quedó ante la DIAN.
+        if ($solicitud->tieneFacturaElectronica()) {
+            $resultado['exito'] = false;
+            $resultado['errores'][] = 'La cotización ya tiene factura electrónica y no se puede editar';
+            return $resultado;
+        }
+
         $user = auth()->user();
         $esVendedorPuro = $user
             && $user->hasRole('vendedor')
@@ -614,6 +621,12 @@ class CotizacionService
             'solicitud' => null,
             'errores' => [],
         ];
+
+        if ($solicitud->tieneFacturaElectronica()) {
+            $resultado['exito'] = false;
+            $resultado['errores'][] = 'La cotización ya tiene factura electrónica: para anularla se hace una nota crédito en SIIGO';
+            return $resultado;
+        }
 
         if (empty($datos['motivo_rechazo'])) {
             $resultado['exito'] = false;

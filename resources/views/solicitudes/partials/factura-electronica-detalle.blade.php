@@ -53,6 +53,6 @@
       <p class="text-muted mb-0">Pendiente de facturar. Solo las personas autorizadas pueden enviarla a la DIAN.</p>
     @endif
   @else
-    <p class="text-muted mb-0">Se podrá facturar cuando esté pagada o vendida a crédito.</p>
+    <p class="text-muted mb-0">La cotización está rechazada: no se factura.</p>
   @endif
 </div>

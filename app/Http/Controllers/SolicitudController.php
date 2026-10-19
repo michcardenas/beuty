@@ -2043,8 +2043,8 @@ class SolicitudController extends Controller
     {
         $user = Auth::user();
 
-        // Verificar permisos
-        if (!$user->hasAnyRole(['admin', 'auxiliar_administrativo', 'facturacion', 'inventarios'])) {
+        // Solo quien tiene el permiso de facturar cotizaciones (el mismo de la DIAN), asignado por persona
+        if (!$user->puedeFacturarCotizaciones()) {
             return response()->json([
                 'success' => false,
                 'mensaje' => 'No tiene permisos para generar facturas'

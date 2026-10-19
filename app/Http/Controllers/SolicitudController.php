@@ -237,8 +237,9 @@ class SolicitudController extends Controller
                         if ($isVendedor) {
                             $puedeEditar = $esSuya && $s->puedeEditarVendedor();
                         } else {
-                            $puedeEditar = auth()->user()->hasAnyRole(['facturacion', 'auxiliar_administrativo'])
-                                || ($s->esEditable() && auth()->user()->hasAnyRole(['admin', 'inventarios']));
+                            $puedeEditar = !$s->tieneFacturaElectronica()
+                                && (auth()->user()->hasAnyRole(['facturacion', 'auxiliar_administrativo'])
+                                    || ($s->esEditable() && auth()->user()->hasAnyRole(['admin', 'inventarios'])));
                         }
                         if ($puedeEditar) {
                             $buttons .= '<a href="'.route('solicitudes.edit', $s->id).'" class="btn btn-outline-primary btn-sm"
@@ -1231,6 +1232,14 @@ class SolicitudController extends Controller
             ], 400);
         }
 
+        // Se puede facturar antes de aplicar: una factura ante la DIAN se anula con nota crédito, no rechazando
+        if ($solicitud->tieneFacturaElectronica()) {
+            return response()->json([
+                'success' => false,
+                'mensaje' => 'Esta cotización ya tiene factura electrónica: para anularla se hace una nota crédito en SIIGO'
+            ], 400);
+        }
+
         $request->validate([
             'motivo_rechazo' => 'required|string|max:1000'
         ]);
@@ -1697,8 +1706,10 @@ class SolicitudController extends Controller
                 abort(403, 'No tiene permisos para editar cotizaciones');
             }
 
-            // Verificar que sea editable (facturación y auxiliar_administrativo pueden editar siempre)
-            if (!$user->hasAnyRole(['facturacion', 'auxiliar_administrativo']) && !$solicitud->esEditable()) {
+            // Verificar que sea editable (facturación y auxiliar_administrativo pueden editar
+            // siempre, salvo que ya tenga factura electrónica)
+            if ($solicitud->tieneFacturaElectronica()
+                || (!$user->hasAnyRole(['facturacion', 'auxiliar_administrativo']) && !$solicitud->esEditable())) {
                 return redirect()->route('solicitudes')
                                ->with('error', 'Esta cotización no puede ser editada');
             }

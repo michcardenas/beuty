@@ -176,14 +176,13 @@ class SolicitudCotizacion extends Model
     }
 
     /**
-     * Una cotización se factura electrónicamente cuando está aplicada y, o ya
-     * está pagada, o se vendió a crédito (total o mixto), que se factura sin
-     * esperar el pago.
+     * Una cotización se puede facturar electrónicamente desde que se crea,
+     * esté pagada o no (decisión de Miracle): basta con que no esté rechazada
+     * ni tenga ya factura.
      */
     public function puedeFacturarSiigo(): bool
     {
-        return $this->estado === self::ESTADO_APLICADA
-            && ($this->estado_pago === self::PAGO_PAGADO || $this->esVentaACredito())
+        return $this->estado !== self::ESTADO_RECHAZADA
             && !$this->tieneFacturaElectronica();
     }
 
@@ -508,7 +507,8 @@ class SolicitudCotizacion extends Model
      */
     public function esEditable(): bool
     {
-        return $this->estado_pago !== self::PAGO_PAGADO;
+        return $this->estado_pago !== self::PAGO_PAGADO
+            && !$this->tieneFacturaElectronica();
     }
 
     /**
@@ -519,6 +519,11 @@ class SolicitudCotizacion extends Model
      */
     public function puedeEditarVendedor(): bool
     {
+        // Con factura electrónica, lo cotizado ya quedó ante la DIAN.
+        if ($this->tieneFacturaElectronica()) {
+            return false;
+        }
+
         if ($this->pagos()->where('estado', PagoSolicitud::ESTADO_APROBADO)->exists()) {
             return false;
         }
@@ -537,7 +542,8 @@ class SolicitudCotizacion extends Model
      */
     public function esEliminable(): bool
     {
-        return $this->estado === self::ESTADO_PENDIENTE;
+        return $this->estado === self::ESTADO_PENDIENTE
+            && !$this->tieneFacturaElectronica();
     }
 
     /**

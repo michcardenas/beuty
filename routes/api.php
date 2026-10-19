@@ -17,3 +17,14 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
+
+/*
+|--------------------------------------------------------------------------
+| Sincronización de catálogo Miracle -> Belleza Áurea (solo lectura)
+|--------------------------------------------------------------------------
+| Endpoint autenticado por token (?token= o header X-Sync-Token /
+| Authorization: Bearer). Expone productos con precios Centro de
+| Experiencia y Distribuidor, stock, imágenes y variantes.
+*/
+Route::get('/v1/aurea/productos', [\App\Http\Controllers\Api\ProductoSyncController::class, 'productos'])
+    ->name('api.aurea.productos');

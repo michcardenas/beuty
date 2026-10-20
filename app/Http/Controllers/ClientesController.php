@@ -142,7 +142,17 @@ HTML;
         $rules = [
             'numero_identificacion' => [
                 $request->tipo_cliente === 'juridica' ? 'nullable' : 'required', 'string', 'max:255',
-                Rule::unique('clientes')->ignore($cliente->id)
+                // Dice QUIÉN tiene el número: los clientes eliminados solo quedan
+                // inactivos, no salen en la lista y siguen ocupando su número.
+                function ($attribute, $value, $fail) use ($cliente) {
+                    $otro = Cliente::where('numero_identificacion', $value)
+                        ->when($cliente->exists, fn ($q) => $q->where('id', '!=', $cliente->id))
+                        ->first();
+                    if ($otro) {
+                        $fail("Ya existe el cliente #{$otro->id} «{$otro->nombre_completo}» con este número"
+                            . ($otro->activo ? '.' : ' (está eliminado: pida a un administrador que lo restaure o le cambie el número).'));
+                    }
+                },
             ],
             'tipo_cliente' => ['required', 'in:natural,juridica'],
             'nombre_contacto' => [$request->tipo_cliente === 'juridica' ? 'nullable' : 'required', 'string', 'max:255'],

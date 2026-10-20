@@ -38,7 +38,7 @@ class SiigoFacturacionService
 
         if ($cliente) {
             $this->resolverCliente($cliente, $datosFiscales);
-            $customerIdentification = $cliente->numero_identificacion ?? $cliente->nit;
+            $customerIdentification = $cliente->identificacion_facturacion;
             $emailDestino = $datosFiscales['email'] ?? $cliente->email;
         } elseif ($datosFiscales && !empty($datosFiscales['numero_identificacion'])) {
             $customerIdentification = $datosFiscales['numero_identificacion'];
@@ -789,7 +789,7 @@ class SiigoFacturacionService
             return; // Already synced
         }
 
-        $identificacion = $datosFiscales['numero_identificacion'] ?? $cliente->numero_identificacion ?? $cliente->nit;
+        $identificacion = $datosFiscales['numero_identificacion'] ?? $cliente->identificacion_facturacion;
         if (!$identificacion) {
             return;
         }
@@ -878,8 +878,12 @@ class SiigoFacturacionService
     private function crearClienteEnSiigo(Cliente $cliente, ?array $datosFiscales = null): void
     {
         $tipoDoc = $datosFiscales['tipo_documento'] ?? $cliente->tipo_documento ?? ($cliente->es_persona_juridica ? '31' : '13');
+        $identificacion = $datosFiscales['numero_identificacion'] ?? $cliente->identificacion_facturacion;
+        // La empresa se crea con su NIT aunque tipo_documento diga cédula (la del representante).
+        if (!isset($datosFiscales['numero_identificacion']) && $cliente->es_persona_juridica && $cliente->nit) {
+            $tipoDoc = '31';
+        }
         $esEmpresa = $cliente->es_persona_juridica || $tipoDoc === '31';
-        $identificacion = $datosFiscales['numero_identificacion'] ?? $cliente->numero_identificacion ?? $cliente->nit;
 
         $nombre = $esEmpresa
             ? [$cliente->razon_social ?? $cliente->nombre_contacto ?? 'Cliente']

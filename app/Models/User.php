@@ -18,20 +18,16 @@ class User extends Authenticatable
      *
      * @var array<int, string>
      */
-    /** Permiso para enviar cotizaciones a la DIAN (factura electrónica por SIIGO). */
-    public const PERMISO_FACTURAR_COTIZACIONES = 'cotizaciones.facturar_siigo';
-
-    /** Roles que facturan cotizaciones (los mismos que ya registraban la factura a mano). */
-    public const ROLES_FACTURAN_COTIZACIONES = ['admin', 'auxiliar_administrativo', 'facturacion', 'inventarios'];
+    /** Roles que envían cotizaciones a la DIAN (factura electrónica por SIIGO). */
+    public const ROLES_FACTURAN_COTIZACIONES = ['admin', 'auxiliar_administrativo'];
 
     /**
-     * Puede enviar cotizaciones a la DIAN: hace falta el permiso explícito,
-     * que se asigna por persona en Configuración SIIGO (ni siquiera admin lo
-     * tiene por defecto).
+     * Puede enviar cotizaciones a la DIAN: va por rol (admin y auxiliar
+     * administrativo), no por persona.
      */
     public function puedeFacturarCotizaciones(): bool
     {
-        return $this->activo && $this->hasPermissionTo(self::PERMISO_FACTURAR_COTIZACIONES);
+        return $this->activo && $this->hasAnyRole(self::ROLES_FACTURAN_COTIZACIONES);
     }
 
     protected $fillable = [

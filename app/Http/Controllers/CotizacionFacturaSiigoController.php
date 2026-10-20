@@ -13,8 +13,8 @@ use Illuminate\Support\Facades\Log;
  * Factura electrónica de cotizaciones: revisión de datos, envío a la DIAN
  * (uno o varios), estado y descarga del PDF / XML.
  *
- * Enviar exige el permiso cotizaciones.facturar_siigo (se asigna por persona
- * en Configuración SIIGO). Ver el estado y descargar, los roles de la ruta.
+ * Enviar es solo para admin y auxiliar administrativo
+ * (User::puedeFacturarCotizaciones). Ver el estado y descargar, los roles de la ruta.
  */
 class CotizacionFacturaSiigoController extends Controller
 {

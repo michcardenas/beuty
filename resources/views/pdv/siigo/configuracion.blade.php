@@ -278,24 +278,15 @@
                             </div>
 
                             <label class="form-label fw-semibold">Quién puede enviar cotizaciones a la DIAN</label>
-                            @if($posiblesFacturadores->isEmpty())
-                                <p class="text-muted small mb-0">No hay usuarios activos con rol de administración, facturación o inventarios.</p>
+                            <p class="text-muted small mb-2">Solo los roles Administrador y Auxiliar Administrativo ven el botón «Enviar a la DIAN». Para dárselo a alguien, asígnele uno de esos roles.</p>
+                            @if($facturadores->isEmpty())
+                                <p class="text-muted small mb-0">No hay usuarios activos con esos roles.</p>
                             @else
-                                <div class="row">
-                                    @foreach($posiblesFacturadores as $usuario)
-                                        <div class="col-md-4">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" name="facturadores[]"
-                                                       value="{{ $usuario->id }}" id="facturador{{ $usuario->id }}"
-                                                       {{ $usuario->hasDirectPermission(\App\Models\User::PERMISO_FACTURAR_COTIZACIONES) ? 'checked' : '' }}>
-                                                <label class="form-check-label" for="facturador{{ $usuario->id }}">
-                                                    {{ $usuario->name }} <small class="text-muted">{{ $usuario->email }}</small>
-                                                </label>
-                                            </div>
-                                        </div>
+                                <ul class="small mb-0">
+                                    @foreach($facturadores as $usuario)
+                                        <li>{{ $usuario->name }} <small class="text-muted">{{ $usuario->email }}</small></li>
                                     @endforeach
-                                </div>
-                                <small class="text-muted">Solo las personas marcadas ven el botón «Enviar a la DIAN» en las cotizaciones.</small>
+                                </ul>
                             @endif
                         </div>
                     </div>

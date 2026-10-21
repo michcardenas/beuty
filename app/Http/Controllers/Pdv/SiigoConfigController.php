@@ -23,15 +23,15 @@ class SiigoConfigController extends Controller
     {
         $config = $this->configService->obtenerConfiguracionActual();
         $sedes = $this->sedesQueFacturan();
-        $posiblesFacturadores = $this->posiblesFacturadores();
-        return view('pdv.siigo.configuracion', compact('config', 'sedes', 'posiblesFacturadores'));
+        $facturadores = $this->facturadores();
+        return view('pdv.siigo.configuracion', compact('config', 'sedes', 'facturadores'));
     }
 
     /**
      * Quienes pueden entrar a cotizaciones con un rol de oficina: entre ellos se
      * elige a quién se le permite enviar cotizaciones a la DIAN.
      */
-    private function posiblesFacturadores()
+    private function facturadores()
     {
         return User::where('activo', true)
             ->whereHas('roles', fn ($q) => $q->whereIn('name', User::ROLES_FACTURAN_COTIZACIONES))
@@ -109,14 +109,6 @@ class SiigoConfigController extends Controller
                 'siigo_document_type_id' => ($valores['siigo_document_type_id'] ?? null) ?: null,
                 'siigo_credit_note_type_id' => ($valores['siigo_credit_note_type_id'] ?? null) ?: null,
             ]);
-        }
-
-        // Quién puede enviar cotizaciones a la DIAN
-        $elegidos = array_map('intval', (array) $request->input('facturadores', []));
-        foreach ($this->posiblesFacturadores() as $usuario) {
-            in_array($usuario->id, $elegidos, true)
-                ? $usuario->givePermissionTo(User::PERMISO_FACTURAR_COTIZACIONES)
-                : $usuario->revokePermissionTo(User::PERMISO_FACTURAR_COTIZACIONES);
         }
 
         return redirect()->route('pdv.siigo.config')

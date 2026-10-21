@@ -273,7 +273,7 @@ Route::middleware(['auth', 'role:admin,auxiliar_administrativo,facturacion,vende
     Route::post('/solicitudes/{solicitud}/factura', [SolicitudController::class, 'generarFactura'])->name('solicitudes.generar-factura');
     Route::get('/solicitudes/{solicitud}/factura/pdf', [SolicitudController::class, 'descargarFactura'])->name('solicitudes.factura-pdf');
 
-    // Factura electrónica (SIIGO → DIAN). Enviar exige el permiso cotizaciones.facturar_siigo.
+    // Factura electrónica (SIIGO → DIAN). Enviar: solo admin y auxiliar administrativo.
     Route::get('/solicitudes/{solicitud}/siigo/revision', [App\Http\Controllers\CotizacionFacturaSiigoController::class, 'revision'])->name('solicitudes.siigo.revision');
     Route::post('/solicitudes/{solicitud}/siigo/enviar', [App\Http\Controllers\CotizacionFacturaSiigoController::class, 'enviar'])->name('solicitudes.siigo.enviar');
     Route::post('/solicitudes/siigo/enviar-lote', [App\Http\Controllers\CotizacionFacturaSiigoController::class, 'enviarLote'])->name('solicitudes.siigo.enviar-lote');

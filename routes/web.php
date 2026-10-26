@@ -533,6 +533,7 @@ Route::middleware(['auth', 'role:admin,cajero_principal'])
 Route::middleware(['auth', 'role:admin,cajero_principal'])
     ->prefix('pdv/ventas')->name('pdv.ventas.')->group(function () {
         Route::get('/', [VentaPdvController::class, 'index'])->name('index');
+        Route::get('/export/excel', [VentaPdvController::class, 'exportarExcel'])->name('export.excel');
         Route::post('/actualizar-estados-pendientes', [VentaPdvController::class, 'actualizarEstadosPendientes'])->name('actualizar-estados-pendientes');
         Route::get('/crear', [VentaPdvController::class, 'crear'])->name('crear');
         Route::post('/procesar', [VentaPdvController::class, 'procesarVenta'])->name('procesar');

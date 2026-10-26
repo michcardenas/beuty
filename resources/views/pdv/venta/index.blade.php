@@ -9,6 +9,9 @@
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h4 class="fw-bold mb-0"><i class="bi bi-list-ul me-2"></i>Historial de Ventas</h4>
             <div>
+                <button type="button" class="btn btn-success me-2" onclick="exportarExcel()">
+                    <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
+                </button>
                 <a href="{{ route('pdv.ventas.crear') }}" class="btn text-white" style="background: var(--miracle-pink);">
                     <i class="bi bi-cart-plus me-1"></i>Nueva Venta
                 </a>
@@ -221,6 +224,22 @@
             $('#filtroEstado, #filtroCaja, #filtroMetodo').val('');
             $('#filtroDesde, #filtroHasta').val('');
             tabla.ajax.reload();
+        }
+
+        function exportarExcel() {
+            const params = new URLSearchParams();
+            const estado = $('#filtroEstado').val();
+            const caja = $('#filtroCaja').val();
+            const metodo = $('#filtroMetodo').val();
+            const desde = $('#filtroDesde').val();
+            const hasta = $('#filtroHasta').val();
+            if (estado) params.append('estado', estado);
+            if (caja) params.append('caja_id', caja);
+            if (metodo) params.append('metodo_pago', metodo);
+            if (desde) params.append('fecha_desde', desde);
+            if (hasta) params.append('fecha_hasta', hasta);
+            const qs = params.toString();
+            window.location = "{{ route('pdv.ventas.export.excel') }}" + (qs ? ('?' + qs) : '');
         }
 
         function verDetalle(id) {

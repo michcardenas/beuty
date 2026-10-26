@@ -21,6 +21,8 @@ use Illuminate\Http\Request;
 use Yajra\DataTables\Facades\DataTables;
 use Barryvdh\DomPDF\Facade\Pdf;
 use App\Models\Prefactura;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\VentasPdvFiltradoExport;
 
 class VentaPdvController extends Controller
 {
@@ -110,6 +112,43 @@ class VentaPdvController extends Controller
 
         $cajas = \App\Models\Caja::all();
         return view('pdv.venta.index', compact('cajas'));
+    }
+
+    /**
+     * Exportar a Excel el historial de ventas aplicando LOS MISMOS filtros que la
+     * tabla (estado, caja, método de pago, rango de fechas) y el alcance por caja.
+     */
+    public function exportarExcel(Request $request)
+    {
+        $query = VentaPdv::query();
+
+        // Mismo alcance que el listado: quien no es admin solo ve su caja activa.
+        if (!auth()->user()->hasRole('admin')) {
+            $sesion = $this->cajaService->obtenerSesionActivaDeUsuario(auth()->id());
+            if ($sesion) {
+                $query->where('caja_id', $sesion->caja_id);
+            }
+        }
+
+        if ($request->estado) {
+            $query->where('estado', $request->estado);
+        }
+        if ($request->caja_id) {
+            $query->where('caja_id', $request->caja_id);
+        }
+        if ($request->metodo_pago) {
+            $query->where('metodo_pago', $request->metodo_pago);
+        }
+        if ($request->fecha_desde) {
+            $query->whereDate('created_at', '>=', $request->fecha_desde);
+        }
+        if ($request->fecha_hasta) {
+            $query->whereDate('created_at', '<=', $request->fecha_hasta);
+        }
+
+        $nombre = 'ventas_pdv_' . now()->format('Ymd_His') . '.xlsx';
+
+        return Excel::download(new VentasPdvFiltradoExport($query), $nombre);
     }
 
     public function crear(Request $request)

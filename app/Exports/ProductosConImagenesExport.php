@@ -37,7 +37,7 @@ class ProductosConImagenesExport implements FromCollection, WithHeadings, WithMa
 
     public function collection()
     {
-        $query = Producto::with(['categoria', 'imagenPrincipal', 'precios.listaPrecio'])
+        $query = Producto::with(['categoria', 'imagenPrincipal', 'precios.listaPrecio', 'stockPrincipal'])
             ->where('activo', true)
             ->where('eliminado', false);
 
@@ -81,6 +81,10 @@ class ProductosConImagenesExport implements FromCollection, WithHeadings, WithMa
 
         $row[] = $producto->controlar_stock ? 'Sí' : 'No';
 
+        // Stock Máximo (el mismo valor del input del formulario: registro principal sin variante)
+        $stockMaximo = optional($producto->stockPrincipal)->stock_maximo;
+        $row[] = ($stockMaximo !== null) ? $stockMaximo : '-';
+
         return $row;
     }
 
@@ -101,6 +105,7 @@ class ProductosConImagenesExport implements FromCollection, WithHeadings, WithMa
         }
 
         $headings[] = 'Control Stock';
+        $headings[] = 'Stock Máximo';
 
         return $headings;
     }
@@ -138,7 +143,7 @@ class ProductosConImagenesExport implements FromCollection, WithHeadings, WithMa
                 $row = 2; // Empezar desde la fila 2 (después de encabezados)
 
                 // Calcular última columna dinámicamente
-                $totalColumnas = 6 + $this->listasPrecios->count() + 1; // 6 fijas + listas + control stock
+                $totalColumnas = 6 + $this->listasPrecios->count() + 2; // 6 fijas + listas + control stock + stock máximo
                 $lastCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($totalColumnas);
 
                 foreach ($this->productos as $producto) {

@@ -121,14 +121,14 @@
         @endif
 
         {{-- Cotizaciones (para vendedor, admin, auxiliar_administrativo, facturación, auxiliar inventario y garantías) --}}
-        @if(auth()->user()->hasRole(['admin', 'auxiliar_administrativo', 'facturacion']))
-            {{-- LIBERADOS: admin, auxiliar_administrativo y facturacion entran normal a Cotizaciones. --}}
+        @if(auth()->user()->hasRole(['admin', 'auxiliar_administrativo', 'facturacion', 'inventarios', 'auxiliar_inventario', 'garantias']))
+            {{-- LIBERADOS: admin, auxiliar_administrativo, facturacion, inventarios, auxiliar_inventario y garantias entran normal a Cotizaciones. --}}
             <a href="{{ route('solicitudes') }}"
                class="nav-link mb-2 d-flex align-items-center gap-2 {{ request()->routeIs('solicitudes*') ? 'active' : 'text-dark' }}">
                 <i class="bi bi-clipboard-data"></i>
                 <span>Cotizaciones</span>
             </a>
-        @elseif(auth()->user()->hasRole(['vendedor', 'inventarios', 'auxiliar_inventario', 'garantias']))
+        @elseif(auth()->user()->hasRole(['vendedor']))
             {{-- TEMPORAL: estos roles ven el menú pero al dar clic se simula una caída de SIIGO
                  y se bloquea/redirige. Para liberar un rol, muévelo al @if de arriba (enlace normal). --}}
             <a href="#" onclick="event.preventDefault(); cotizacionesSiigoBloqueo();"

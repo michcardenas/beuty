@@ -122,22 +122,14 @@
 
         {{-- Cotizaciones (para vendedor, admin, auxiliar_administrativo, facturación, auxiliar inventario y garantías) --}}
         @if(auth()->user()->hasRole(['vendedor', 'admin', 'auxiliar_administrativo', 'facturacion', 'inventarios', 'auxiliar_inventario', 'garantias']))
-            @if(auth()->user()->hasRole('vendedor') && !auth()->user()->hasRole(['admin', 'auxiliar_administrativo', 'facturacion', 'inventarios', 'auxiliar_inventario', 'garantias']))
-                {{-- TEMPORAL: el vendedor ve el menú pero al dar clic se simula una caída de SIIGO
-                     y se bloquea/redirige. Para restablecer el acceso normal, elimina este bloque
-                     @if/@else y deja solo el enlace normal a route('solicitudes'). --}}
-                <a href="#" onclick="event.preventDefault(); cotizacionesSiigoBloqueo();"
-                   class="nav-link mb-2 d-flex align-items-center gap-2 text-dark">
-                    <i class="bi bi-clipboard-data"></i>
-                    <span>Cotizaciones</span>
-                </a>
-            @else
-                <a href="{{ route('solicitudes') }}"
-                   class="nav-link mb-2 d-flex align-items-center gap-2 {{ request()->routeIs('solicitudes*') ? 'active' : 'text-dark' }}">
-                    <i class="bi bi-clipboard-data"></i>
-                    <span>Cotizaciones</span>
-                </a>
-            @endif
+            {{-- TEMPORAL: TODOS los roles ven el menú pero al dar clic se simula una caída de SIIGO
+                 y se bloquea/redirige. Para restablecer el acceso normal, reemplaza este enlace por el
+                 normal: <a href="{{ route('solicitudes') }}" ...>...</a> y quita el <script> del final. --}}
+            <a href="#" onclick="event.preventDefault(); cotizacionesSiigoBloqueo();"
+               class="nav-link mb-2 d-flex align-items-center gap-2 text-dark">
+                <i class="bi bi-clipboard-data"></i>
+                <span>Cotizaciones</span>
+            </a>
         @endif
 
         {{-- Clientes (para vendedor, admin, auxiliar_administrativo, facturación e inventarios) --}}

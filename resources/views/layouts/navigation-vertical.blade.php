@@ -121,13 +121,23 @@
         @endif
 
         {{-- Cotizaciones (para vendedor, admin, auxiliar_administrativo, facturación, auxiliar inventario y garantías) --}}
-        {{-- TEMPORAL: 'vendedor' OCULTO del menú. Para restablecer, vuelve a agregar 'vendedor' al inicio del array. --}}
-        @if(auth()->user()->hasRole(['admin', 'auxiliar_administrativo', 'facturacion', 'inventarios', 'auxiliar_inventario', 'garantias']))
-            <a href="{{ route('solicitudes') }}"
-               class="nav-link mb-2 d-flex align-items-center gap-2 {{ request()->routeIs('solicitudes*') ? 'active' : 'text-dark' }}">
-                <i class="bi bi-clipboard-data"></i>
-                <span>Cotizaciones</span>
-            </a>
+        @if(auth()->user()->hasRole(['vendedor', 'admin', 'auxiliar_administrativo', 'facturacion', 'inventarios', 'auxiliar_inventario', 'garantias']))
+            @if(auth()->user()->hasRole('vendedor') && !auth()->user()->hasRole(['admin', 'auxiliar_administrativo', 'facturacion', 'inventarios', 'auxiliar_inventario', 'garantias']))
+                {{-- TEMPORAL: el vendedor ve el menú pero al dar clic se simula una caída de SIIGO
+                     y se bloquea/redirige. Para restablecer el acceso normal, elimina este bloque
+                     @if/@else y deja solo el enlace normal a route('solicitudes'). --}}
+                <a href="#" onclick="event.preventDefault(); cotizacionesSiigoBloqueo();"
+                   class="nav-link mb-2 d-flex align-items-center gap-2 text-dark">
+                    <i class="bi bi-clipboard-data"></i>
+                    <span>Cotizaciones</span>
+                </a>
+            @else
+                <a href="{{ route('solicitudes') }}"
+                   class="nav-link mb-2 d-flex align-items-center gap-2 {{ request()->routeIs('solicitudes*') ? 'active' : 'text-dark' }}">
+                    <i class="bi bi-clipboard-data"></i>
+                    <span>Cotizaciones</span>
+                </a>
+            @endif
         @endif
 
         {{-- Clientes (para vendedor, admin, auxiliar_administrativo, facturación e inventarios) --}}
@@ -350,3 +360,25 @@
         </form>
     </div>
 </div>
+
+{{-- TEMPORAL: pop-up de "caída de SIIGO" para el acceso a Cotizaciones del vendedor.
+     Bloquea la pantalla (no se cierra con clic afuera ni ESC) y al aceptar redirige al inicio. --}}
+<script>
+    function cotizacionesSiigoBloqueo() {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error de conexión',
+                text: 'Falló la conexión de SIIGO. Por favor intenta más tarde.',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                confirmButtonText: 'Ir al inicio'
+            }).then(function () {
+                window.location.href = '{{ url('/') }}';
+            });
+        } else {
+            alert('Falló la conexión de SIIGO. Por favor intenta más tarde.');
+            window.location.href = '{{ url('/') }}';
+        }
+    }
+</script>
